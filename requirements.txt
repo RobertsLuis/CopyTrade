@@ -1,0 +1,5 @@
+iqoption==6.8.9.1
+pylint
+requests
+websocket-client==0.56
+python-telegram-bot

@@ -404,7 +404,7 @@ def buy(conta, stake, pair, direction):
     direction = direction.casefold()
     api = conta
     print(pair, stake, direction, 5)
-    check, id = api.buy_digital_spot_v2(pair, stake, direction, 5)
+    check, id = api.buy_digital_spot(pair, stake, direction, 5)
     if check:
         # __updateLog(f"TRADE -  {pair} {direction} at {currentPrice}")
         # tradesToCheck.append((id, pair, direction, tradeTime, "immediate"))

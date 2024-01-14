@@ -10,6 +10,7 @@ import math
 from datetime import datetime
 import threading
 from multiprocessing import Process, Event, Manager
+import os
 import asyncio
 
 token = "6485467359:AAFZZuUeP846mDcyhKs887Hs-LqjGoKJHrw"
@@ -358,6 +359,7 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
             if not (acc_api.check_connect()):
                 acc_api.connect()
             print('Waiting')
+            print(acc_banca_inicial)
             if not (contas[informacoes_conta['email']]):
                 break
             sinal_compra.wait()
@@ -804,10 +806,12 @@ if __name__ == '__main__':
 
         startTime = __getCurrentTime()
         print("Starting...")
-
+        num_cores = os.cpu_count()
+        print(f"Número de núcleos da CPU: {num_cores}")
         api = IQ_Option('winnerzonebot@gmail.com', 'WinnerzoneBOT1!')
         check, reason = api.connect()
         print('Bot connected!')
+        print(api.get_balance())
 
         app = Application.builder().token(token).build()
         '''job_queue = app.job_queue

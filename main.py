@@ -9,7 +9,7 @@ import time
 import math
 from datetime import datetime
 import threading
-from multiprocessing import Process, Event, Manager
+from multiprocessing import Process, Event, Manager, set_start_method
 import os
 import asyncio
 
@@ -783,6 +783,7 @@ def monitorPairs():
 
 
 if __name__ == '__main__':
+    set_start_method("spawn")
     taxas = {}
 
     aux_mensagemTransmissao = ''

@@ -612,17 +612,18 @@ def __monitorScheduledTrades():
 
 
 def monitorPairs():
+    global api
     print("Monitoring pairs...")
     while True:
         '''if stopThreadSignal:
                 break'''
-        time.sleep(0.1)
-        if not (api.check_connect()):
-            api.connect()
+        time.sleep(0.5)
         if len(taxas) == 0:
             continue
         for monitored_pair in taxas:
+            print("Before check results")
             if len(tradesToCheck) != 0:
+                print("Inside check results")
                 currentTime = __getCurrentTime()
                 for tradeIndex, (checkedPair, tradeTime, tradePrice, tradeDirection, tradeType) in enumerate(
                         tradesToCheck):
@@ -671,6 +672,8 @@ def monitorPairs():
                             menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \nDireção: {tradeDirectionMessage}\n⏱️ Horário: {':'.join(tradeTime.split(':')[0:2])}\n📝 Resultado: {result}"
                             mensagemListaTransmissao(menssagemResultado)
 
+            if not (api.check_connect()):
+                api.connect()
             candle = api.get_candles(monitored_pair, 300, 1, time.time())  # current price
             upper_limit, bottom_limit = None, None
             try:
@@ -687,8 +690,9 @@ def monitorPairs():
                 print("Couldn't find {} candles".format(monitored_pair), end='\r')
                 time.sleep(2)
                 continue
+
             currentTime = __getCurrentTime()
-            #print(f"Monitoring... {currentTime}", end='\r')
+            print(f"Monitoring... {currentTime} {monitored_pair} {current_price}")
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
             if ((upper_limit != None and current_price < upper_limit) and (

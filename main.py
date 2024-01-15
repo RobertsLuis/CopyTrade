@@ -617,6 +617,8 @@ def monitorPairs():
         '''if stopThreadSignal:
                 break'''
         time.sleep(0.1)
+        if not (api.check_connect()):
+            api.connect()
         if len(taxas) == 0:
             continue
         for monitored_pair in taxas:

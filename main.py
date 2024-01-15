@@ -95,8 +95,8 @@ async def menu_options_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "Link ytb como usar\nCaso tenha algum outro problema que não esteja presente no vídeo, entre em contato com @Winnerzone_83")
     else:
         # Opção inválida, reinicie a conversa
-        await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
-
+        #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
+        pass
     # Reiniciando a conversa
     return ConversationHandler.END
 
@@ -372,7 +372,6 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
                     acc_trades.append(f"{infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}")
 
             else:
-                print(infos_compra_atualizadas)
                 for i, trade_pair in enumerate(infos_compra_atualizadas['pair']):
                     if f"{trade_pair} {infos_compra_atualizadas['direction']}" in acc_trades:
                         infos_compra_atualizadas['type'].pop(i)
@@ -384,6 +383,8 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
 
                 acc_trades.append(' '.join([f'{pair} {infos_compra_atualizadas["direction"][i]}' for i, pair in
                                             enumerate(infos_compra_atualizadas['pair'])]))
+
+            print(acc_trades)
 
             time.sleep(0.1)
 
@@ -468,12 +469,12 @@ def buy_multi(conta, stake, pairs, directions):
 def handle_response(text: str) -> str:
     processed_text = text.lower()
 
-    if 'hello' in processed_text:
+    """"'if 'hello' in processed_text:
         return 'hello boy'
     if 'are you ok' in processed_text:
         return 'of course'
     if 'taxas vip' in processed_text and len(taxas) != 0:
-        return 'Taxas computadas'
+        return 'Taxas computadas'"""
 
 
 async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
@@ -527,8 +528,7 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
             else:
                 return
 
-            print('Bot: ', response)
-            await update.message.reply_text(response)
+            #await update.message.reply_text(response)
 
 
 async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
@@ -537,8 +537,6 @@ async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
 
 def mensagemListaTransmissao(mensagem):
     global aux_mensagemTransmissao
-    # currentTime = __getCurrentTime()
-    # print(f"\n\n{'-'*43}\n\n{mensagem}")
     aux_mensagemTransmissao += f"\n\n{'-' * 43}\n\n{mensagem}" if aux_mensagemTransmissao != "" else f"{mensagem}"
 
 
@@ -608,13 +606,13 @@ def __monitorScheduledTrades():
                                 )
                 # (checkedPair, tradeTime, tradePrice, tradeDirection, tradeType)
                 tradesToCheck.extend(aux_list)
-                print(tradesToCheck)
                 time.sleep(3)
                 scheduledTrades = [[], [], []]
                 scheduleSign.clear()
 
 
 def monitorPairs():
+    print("Monitoring pairs...")
     while True:
         '''if stopThreadSignal:
                 break'''
@@ -664,8 +662,8 @@ def monitorPairs():
                                     result = "⚪ DOJI"
                                 else:
                                     result = "⚪ DOJI"
-                            print(f"Resultado: {result}")
 
+                            print(f"Resultado: {result}")
                             tradesToCheck.pop(tradeIndex)
                             tradeDirectionMessage = "🔴 PUT" if tradeDirection == 'put' else "🟢 CALL"
                             menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \nDireção: {tradeDirectionMessage}\n⏱️ Horário: {':'.join(tradeTime.split(':')[0:2])}\n📝 Resultado: {result}"
@@ -688,7 +686,7 @@ def monitorPairs():
                 time.sleep(2)
                 continue
             currentTime = __getCurrentTime()
-            print(f"Monitoring... {currentTime}", end='\r')
+            #print(f"Monitoring... {currentTime}", end='\r')
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
             if ((upper_limit != None and current_price < upper_limit) and (
@@ -698,7 +696,7 @@ def monitorPairs():
             elif upper_limit != None and current_price >= upper_limit:
 
                 if (f"{monitored_pair} put") not in trades:
-                    print(f"{monitored_pair} at {current_price} touched the upper limit ({upper_limit})")
+                    print(f"{currentTime}: {monitored_pair} at {current_price} touched the upper limit ({upper_limit})")
                     if (minute % 5 == 0) and (seconds <= 5) or ((datetime.strptime(currentTime,
                                                                                    "%H:%M:%S") - datetime.strptime(
                             startTime, '%H:%M:%S')).total_seconds() < 10):
@@ -741,7 +739,7 @@ def monitorPairs():
             elif bottom_limit != None and current_price <= bottom_limit:
 
                 if (f"{monitored_pair} call") not in trades:
-                    print(f"{monitored_pair} at {current_price} touched the bottom limit ({bottom_limit})")
+                    print(f"{currentTime}: {monitored_pair} at {current_price} touched the bottom limit ({bottom_limit})")
                     if (minute % 5 == 0) and (seconds <= 5) or ((datetime.strptime(currentTime,
                                                                                    "%H:%M:%S") - datetime.strptime(
                             startTime, '%H:%M:%S')).total_seconds() < 10):

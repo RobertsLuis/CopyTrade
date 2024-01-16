@@ -692,7 +692,6 @@ def monitorPairs():
                 continue
 
             currentTime = __getCurrentTime()
-            print(f"Monitoring... {currentTime} {monitored_pair} {current_price}")
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
             if ((upper_limit != None and current_price < upper_limit) and (

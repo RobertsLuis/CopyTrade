@@ -621,9 +621,7 @@ def monitorPairs():
         if len(taxas) == 0:
             continue
         for monitored_pair in taxas:
-            print("Before check results")
             if len(tradesToCheck) != 0:
-                print("Inside check results")
                 currentTime = __getCurrentTime()
                 for tradeIndex, (checkedPair, tradeTime, tradePrice, tradeDirection, tradeType) in enumerate(
                         tradesToCheck):
@@ -691,6 +689,7 @@ def monitorPairs():
                 time.sleep(2)
                 continue
 
+            print(f"Monitoring... {monitored_pair} {current_price}")
             currentTime = __getCurrentTime()
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])

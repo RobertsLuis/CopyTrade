@@ -531,6 +531,8 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
                 thread_agendamentos.start()
                 thread_transmissao.start()
 
+                mensagemListaTransmissao("Taxas computadas")
+
             else:
                 return
 

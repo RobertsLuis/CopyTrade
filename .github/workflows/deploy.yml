@@ -19,7 +19,7 @@ jobs:
 
           ARGS: '-rlgoDzvc -i --delete'
           SOURCE: '.'
-          TARGET: '/CopyTrade-IqOption'
+          TARGET: '.'
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}

@@ -25,7 +25,6 @@ jobs:
           ARGS: '-rlgoDzvc -i --delete -o StrictHostKeyChecking=no'
           SOURCE: '.'
           TARGET: '.'
-          SCRIPT_BEFORE: ls
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}

@@ -124,10 +124,6 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # ...
     # retorna para o usuário o e-mail que está associoado ao código dele (no BD) para ele fazer login na IQ OPTION e sinaliza que caso queira trocar o e-mail da IQ Option, entre em contato com o suporte
 
-
-    '''rey.iqop@gmail.com
-    Iq@08840051511'''
-
     # Pede a senha dele para entrar na IQ Option
     # await update.message.reply_text(f"")
     # Definindo o estado para a etapa da senha no cadastro

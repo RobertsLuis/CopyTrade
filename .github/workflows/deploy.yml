@@ -21,12 +21,11 @@ jobs:
       - name: SSH Deploy
         uses: easingthemes/ssh-deploy@v2
         with:
-
           ARGS: '-rlgoDzvc -i --delete'
           SOURCE: '.'
           TARGET: '.'
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_USER: 'root'
-          REMOTE_HOST: '154.56.43.14'
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PORT: '22'
 

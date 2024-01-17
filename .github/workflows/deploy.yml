@@ -1,9 +1,9 @@
 name: Deploy on Push
-
 on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,10 +21,10 @@ jobs:
       - name: SSH Deploy
         uses: easingthemes/ssh-deploy@v2
         with:
-          ARGS: '-rlgoDzvc -i --delete'
+          ARGS: '-rlgoDzvc --delete'
           SOURCE: '.'
           TARGET: '.'
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_PORT: 22
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PORT: ${{ secrets.REMOTE_PORT }}

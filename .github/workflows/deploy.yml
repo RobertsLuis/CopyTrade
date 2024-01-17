@@ -12,11 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Debug Info
+        run: |
+          echo "Debug Info:"
+          echo "Current directory: $(pwd)"
+          echo "List files: $(ls -al)"
+
       - name: SSH Deploy
         uses: easingthemes/ssh-deploy@v2
         with:
 
-          ARGS: '-rlgoDzvc --delete'
+          ARGS: '-rlgoDzvc -i --delete -o StrictHostKeyChecking=no'
           SOURCE: '.'
           TARGET: '.'
           SCRIPT_BEFORE: ls
@@ -24,3 +30,4 @@ jobs:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PORT: '22'
+

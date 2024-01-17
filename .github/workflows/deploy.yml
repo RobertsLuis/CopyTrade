@@ -1,0 +1,26 @@
+name: Deploy on Push
+
+on:
+  push:
+    branches:
+      - main
+      -
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: SSH Deploy
+        uses: easingthemes/ssh-deploy@v2
+        with:
+
+          args: '-rlgoDzvc -i --delete'
+          source: '.'
+          target: '/CopyTrade-IqOption'
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote-user: ${{ secrets.SSH_REMOTE_USER }}
+          remote-host: ${{ secrets.SSH_REMOTE_HOST }}
+          remote-port: '22'

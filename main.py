@@ -814,7 +814,7 @@ if __name__ == '__main__':
         tradeEvent = Event()
 
         startTime = __getCurrentTime()
-        print("Starting... with Victor now 1")
+        print("Starting...")
         num_cores = os.cpu_count()
         #print(f"Número de núcleos da CPU: {num_cores}")
         api = IQ_Option('winnerzonebot@gmail.com', 'WinnerzoneBOT1!')

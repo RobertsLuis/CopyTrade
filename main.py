@@ -11,10 +11,13 @@ from datetime import datetime
 import threading
 from multiprocessing import Process, Event, Manager, set_start_method
 import os
+import pytz
 import asyncio
+timezone = pytz.timezone('America/Sao_Paulo')
 
 token = "6485467359:AAFZZuUeP846mDcyhKs887Hs-LqjGoKJHrw"
 botUsername = "@wzTaxa_bot"
+tz = pytz.timezone('America/Sao_Paulo')
 
 # TEM QUE TER THREAD PARA VERIFICAR EM TODAS AS CONTAS SE TEM STOP WIN OU STOP LOSS
 
@@ -24,7 +27,7 @@ MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STA
 
 # Comandos
 def showConfigs(context):
-    context.user_data['ultima_modificacao'] = datetime.now().strftime("%H:%M:%S")
+    context.user_data['ultima_modificacao'] = datetime.now(tz).strftime("%H:%M:%S")
     print(context.user_data['modo_config'])
     linhas = [
         f"📩 Conta: {context.user_data['email']}",
@@ -557,7 +560,7 @@ def monitorarListaTransmissao():
             aux_mensagemTransmissao = ""
             print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
         else:
-            print("Sem mudanças na mensagem")
+            print(f"{__getCurrentTime()} Sem mudanças na mensagem")
 
 
 def __getCurrentTime():
@@ -565,7 +568,7 @@ def __getCurrentTime():
     bots action
 Returns:
     str: IQ Option server time on this format H:M:S"""
-    return datetime.now().strftime(
+    return datetime.now(tz).strftime(
         "%H:%M:%S"
     )
 
@@ -602,7 +605,7 @@ def __monitorScheduledTrades():
 
                 mensagem = f"🎯 TRADE(S) REALIZADA(S) - REVERSÃO M5 🎯\n📊 Transações: \n{scheduledTradesLog}\n⏱️ Horário: {scheduleTradeTime}"
                 mensagemListaTransmissao(mensagem)
-                time.sleep(1)
+                time.sleep(0.5)
                 tradeEvent.clear()
 
                 aux_list = list(zip(scheduledTrades[0],  # PAIRS

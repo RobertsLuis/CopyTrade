@@ -4,3 +4,4 @@ requests
 websocket-client==0.56
 python-telegram-bot
 python-telegram-bot[job-queue]
+pytz~=2023.3.post1

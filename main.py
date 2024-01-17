@@ -105,15 +105,25 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Obtendo o email do usuário
     codigo = update.message.text
 
-    await update.message.reply_text(f"Código validado com sucesso!\n\nAgora, digite a sua senha da IQ OPTION")
+    lista_codigos = ['1', '2', '3']
+    if codigo in lista_codigos:
 
+        if codigo == '1':
+            context.user_data['email'] = 'bejr2002@gmail.com'
+        elif codigo == '2':
+            context.user_data['email'] = 'rey.iqop@gmail.com'
+        elif codigo == '3':
+            context.user_data['email'] = 'belmorvictor@gmail.com'
+
+        await update.message.reply_text(f"Código validado com sucesso!\n\nAgora, digite a sua senha da IQ OPTION")
+        return CADASTRO_SENHA
+    else:
+        await update.message.reply_text(f"Código incorreto. Por favor tente novamente ou entre em contato com o suporte")
+        return CODIGO_BOT
     # Logica para validação do código pelo BD!
     # ...
     # retorna para o usuário o e-mail que está associoado ao código dele (no BD) para ele fazer login na IQ OPTION e sinaliza que caso queira trocar o e-mail da IQ Option, entre em contato com o suporte
-    if codigo == '1':
-        context.user_data['email'] = 'bejr2002@gmail.com'
-    elif codigo == '2':
-        context.user_data['email'] = 'rey.iqop@gmail.com'
+
 
     '''rey.iqop@gmail.com
     Iq@08840051511'''
@@ -121,7 +131,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Pede a senha dele para entrar na IQ Option
     # await update.message.reply_text(f"")
     # Definindo o estado para a etapa da senha no cadastro
-    return CADASTRO_SENHA
+
 
 
 # Função para lidar com o fornecimento da senha
@@ -808,9 +818,9 @@ if __name__ == '__main__':
         tradeEvent = Event()
 
         startTime = __getCurrentTime()
-        print("Starting... teste")
+        print("Starting...")
         num_cores = os.cpu_count()
-        print(f"Número de núcleos da CPU: {num_cores}")
+        #print(f"Número de núcleos da CPU: {num_cores}")
         api = IQ_Option('winnerzonebot@gmail.com', 'WinnerzoneBOT1!')
         check, reason = api.connect()
         print('Bot connected!')

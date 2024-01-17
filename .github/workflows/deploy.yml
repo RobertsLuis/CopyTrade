@@ -18,9 +18,9 @@ jobs:
 
           ARGS: '-rlgoDzvc --delete'
           SOURCE: '.'
-          TARGET: './'
+          TARGET: '.'
+          SCRIPT_BEFORE: ls
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PORT: '22'
-          SCRIPT_BEFORE: ls

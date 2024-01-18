@@ -28,7 +28,6 @@ MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STA
 # Comandos
 def showConfigs(context):
     context.user_data['ultima_modificacao'] = datetime.now(tz).strftime("%H:%M:%S")
-    print(context.user_data['modo_config'])
     linhas = [
         f"📩 Conta: {context.user_data['email']}",
         # f"💰 Banca inicial: {context.user_data['banca_inicial']}",
@@ -295,7 +294,6 @@ async def stop_loss_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def confirmacao_config_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     confirmacao = update.message.text.lower()
     if 'confirmar' in confirmacao or 'sim' in confirmacao:
-        print('here')
         context.user_data['trades'] = []
         informacoes_conta = {
             'email': context.user_data['email'],
@@ -316,7 +314,7 @@ async def confirmacao_config_handler(update: Update, context: ContextTypes.DEFAU
         context.job_queue.run_repeating(listaDeTransmissao, data=name, chat_id=chat_id, interval=1, first=1)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
                                        reply_markup=ReplyKeyboardRemove())
-
+        print(f"{showConfigs(context)}")
         return ConversationHandler.END
     else:
         keyboard = [
@@ -367,8 +365,6 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
         while True:
             if not (acc_api.check_connect()):
                 acc_api.connect()
-            print('Waiting')
-            print(acc_banca_inicial)
             if not (contas[informacoes_conta['email']]):
                 break
             sinal_compra.wait()
@@ -526,15 +522,11 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
                     if taxas[ativo]["CALL"] != None:
                         qtSinais += 1
 
-                print(taxas)
-
+                
                 response: str = handle_response(text)
-                global thread_pares, thread_agendamentos, thread_transmissao
-                thread_pares.start()
-                thread_agendamentos.start()
-                thread_transmissao.start()
-
+                startBot()
                 mensagemListaTransmissao("Taxas computadas")
+                
 
             else:
                 return
@@ -554,24 +546,55 @@ def mensagemListaTransmissao(mensagem):
 def monitorarListaTransmissao():
     while True:
         time.sleep(10)
-        global aux_mensagemTransmissao, mensagemTransmissao
+        global aux_mensagemTransmissao, mensagemTransmissao, stopThreadSignal
         if aux_mensagemTransmissao != mensagemTransmissao and aux_mensagemTransmissao != "":
             mensagemTransmissao = aux_mensagemTransmissao
             aux_mensagemTransmissao = ""
             print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
         else:
             print(f"{__getCurrentTime()} Sem mudanças na mensagem")
+        if stopThreadSignal:
+            break
 
+def startBot():
+    global thread_pares, thread_agendamentos, thread_transmissao
+    thread_pares.start()
+    thread_agendamentos.start()
+    thread_transmissao.start()
+
+def stopBot():
+    global stopThreadSignal, resultados, thread_pares, thread_agendamentos, thread_transmissao
+    print("Stopping...")
+    stopThreadSignal = True
+
+    time.sleep(1)
+    thread_pares.join()
+    thread_agendamentos.join()
+    thread_transmissao.join()
+
+    mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n{resultados}"
+    mensagemListaTransmissao(mensagemFinal)
+    time.sleep(11)
+    raise SystemExit
 
 def __getCurrentTime():
     """Gets the current time of IQ Option server to prevent misunderstandings while logging
     bots action
 Returns:
     str: IQ Option server time on this format H:M:S"""
-    return datetime.now(tz).strftime(
-        "%H:%M:%S"
-    )
+    time = datetime.now(tz).strftime("%H:%M:%S")
+    if time.startswith("14:3"):
+        stopBot()
+    return time
 
+def __updateResultsCallRow(pair='', direction='', message=''):
+    global linhas_taxas, resultados
+    aux = f"{pair} {direction.upper()}"
+    for callRowIndex, call in enumerate(linhas_taxas):
+        if aux in call:
+            linhas_taxas[callRowIndex] += f" {message}"
+    
+    resultados = "\n".join(linhas_taxas)
 
 def __monitorScheduledTrades():
     """Does multitrade (BINARY) with every trade scheduled on the next 5min candle, that are stored on the scheduledTrades.
@@ -579,7 +602,7 @@ def __monitorScheduledTrades():
     By Default, is inactive, just waiting for a signal to start pooling. This signal is sent by monitorPairs when it has any trade scheduled, otherwise, it stays waiting for a signal.
     """
     while True:
-        global scheduledTrades
+        global scheduledTrades, stopThreadSignal
         if stopThreadSignal:
             break
         scheduleSign.wait()
@@ -626,8 +649,9 @@ def monitorPairs():
     global api
     print("Monitoring pairs...")
     while True:
-        '''if stopThreadSignal:
-                break'''
+        global stopThreadSignal
+        if stopThreadSignal:
+                break
         time.sleep(0.5)
         if len(taxas) == 0:
             continue
@@ -680,6 +704,7 @@ def monitorPairs():
                             tradeDirectionMessage = "🔴 PUT" if tradeDirection == 'put' else "🟢 CALL"
                             menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \nDireção: {tradeDirectionMessage}\n⏱️ Horário: {':'.join(tradeTime.split(':')[0:2])}\n📝 Resultado: {result}"
                             mensagemListaTransmissao(menssagemResultado)
+                            __updateResultsCallRow(checkedPair, tradeDirection, f"{':'.join(tradeTime.split(':')[0:2])} {result}")
 
             if not (api.check_connect()):
                 api.connect()
@@ -699,11 +724,13 @@ def monitorPairs():
                 print("Couldn't find {} candles".format(monitored_pair), end='\r')
                 time.sleep(2)
                 continue
-
-            print(f"Monitoring... {monitored_pair} {current_price}")
             currentTime = __getCurrentTime()
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
+            
+            if minute%5==0:
+                print("Monitoring...")
+                
             if ((upper_limit != None and current_price < upper_limit) and (
                     bottom_limit != None and current_price > bottom_limit)):
                 continue
@@ -799,6 +826,7 @@ if __name__ == '__main__':
     set_start_method("spawn")
     taxas = {}
 
+    resultados = ''
     aux_mensagemTransmissao = ''
     mensagemTransmissao = ''
     mensagensEnviadas = []

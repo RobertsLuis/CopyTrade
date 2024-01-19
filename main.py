@@ -12,8 +12,9 @@ import threading
 from multiprocessing import Process, Event, Manager, set_start_method
 import os
 import pytz
+import sys
+
 import asyncio
-timezone = pytz.timezone('America/Sao_Paulo')
 
 token = "6485467359:AAFZZuUeP846mDcyhKs887Hs-LqjGoKJHrw"
 botUsername = "@wzTaxa_bot"
@@ -129,8 +130,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Pede a senha dele para entrar na IQ Option
     # await update.message.reply_text(f"")
     # Definindo o estado para a etapa da senha no cadastro
-
-
+    
 
 # Função para lidar com o fornecimento da senha
 async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -483,12 +483,18 @@ def handle_response(text: str) -> str:
 
 
 async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
-    message_type: str = update.message.chat.type
-    text: str = update.message.text
+    global taxas, linhas_taxas
+    try:
+        message_type: str = update.message.chat.type
+        text: str = update.message.text
+        print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
+    except:
+        message_type: str = update.channel_post.chat.type
+        text: str = update.channel_post.text
+        print(f'User ({update.channel_post.chat.id}) in {message_type}: "{text}"')
+    
 
-    print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
-
-    if message_type == 'group':
+    if message_type == 'group' or message_type == 'channel':
         if botUsername in text:
             new_text: str = text.replace(botUsername, '').strip()
             response: str = handle_response(new_text)
@@ -496,6 +502,8 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
             if "TAXAS VIP" in text:
                 linhas = text.split("\n")
                 linhas_taxas = [linha for linha in linhas if linha.startswith("M5")]
+
+                
                 ativos = list(set([sinal.split(" ")[1].strip() for sinal in linhas_taxas]))
                 ativos.sort()
 
@@ -522,7 +530,6 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
                     if taxas[ativo]["CALL"] != None:
                         qtSinais += 1
 
-                
                 response: str = handle_response(text)
                 startBot()
                 mensagemListaTransmissao("Taxas computadas")
@@ -546,14 +553,14 @@ def mensagemListaTransmissao(mensagem):
 def monitorarListaTransmissao():
     while True:
         time.sleep(10)
-        global aux_mensagemTransmissao, mensagemTransmissao, stopThreadSignal
+        global aux_mensagemTransmissao, mensagemTransmissao, stopListaTransmissao
         if aux_mensagemTransmissao != mensagemTransmissao and aux_mensagemTransmissao != "":
             mensagemTransmissao = aux_mensagemTransmissao
             aux_mensagemTransmissao = ""
             print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
         else:
             print(f"{__getCurrentTime()} Sem mudanças na mensagem")
-        if stopThreadSignal:
+        if stopListaTransmissao:
             break
 
 def startBot():
@@ -563,19 +570,18 @@ def startBot():
     thread_transmissao.start()
 
 def stopBot():
-    global stopThreadSignal, resultados, thread_pares, thread_agendamentos, thread_transmissao
+    global stopThreadSignal, stopListaTransmissao, resultados, thread_pares, thread_agendamentos, thread_transmissao
     print("Stopping...")
     stopThreadSignal = True
-
     time.sleep(1)
-    thread_pares.join()
-    thread_agendamentos.join()
-    thread_transmissao.join()
-
-    mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n{resultados}"
+    scoreBoard = f"✅ {resultados.count('✅')} | ❌ {resultados.count('✅')} | ⚪ {resultados.count('⚪')}"
+    mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n\n{resultados}\n\n{scoreBoard}"
     mensagemListaTransmissao(mensagemFinal)
+
     time.sleep(11)
-    raise SystemExit
+    stopListaTransmissao = True
+
+    sys.exit()
 
 def __getCurrentTime():
     """Gets the current time of IQ Option server to prevent misunderstandings while logging
@@ -583,16 +589,22 @@ def __getCurrentTime():
 Returns:
     str: IQ Option server time on this format H:M:S"""
     time = datetime.now(tz).strftime("%H:%M:%S")
-    if time.startswith("14:3"):
+    if "1:21:" in time:
+        __updateResultsCallRow(pair='stop')
         stopBot()
     return time
 
 def __updateResultsCallRow(pair='', direction='', message=''):
     global linhas_taxas, resultados
-    aux = f"{pair} {direction.upper()}"
-    for callRowIndex, call in enumerate(linhas_taxas):
-        if aux in call:
-            linhas_taxas[callRowIndex] += f" {message}"
+    if pair == 'stop':
+        for callRowIndex, call in enumerate(linhas_taxas):
+            if len(call.split(" ")) == 4:
+                linhas_taxas[callRowIndex] += f" ⏱️"
+    else:   
+        aux = f"{pair} {direction.upper()}"
+        for callRowIndex, call in enumerate(linhas_taxas):
+            if aux in call:
+                linhas_taxas[callRowIndex] += f" {message}"
     
     resultados = "\n".join(linhas_taxas)
 
@@ -669,7 +681,10 @@ def monitorPairs():
                         if deltaTCurrentTime >= 301:
 
                             lastCandle = api.get_candles(checkedPair, 300, 1, time.time())
+
                             lastCandleCloseValue = lastCandle[0]['close']
+                            if not(tradeType == "immediate"):
+                                tradePrice = lastCandle[0]['open']
 
                             print(f"Checando {checkedPair}...")
                             print(lastCandle)
@@ -678,33 +693,37 @@ def monitorPairs():
                                 # down
                                 print("Abaixou")
                                 if tradeType == "immediate":
-                                    result = "✅ WIN RT" if tradeDirection == 'put' else "❌ HIT RT"
+                                    result = "WIN RT" if tradeDirection == 'put' else "HIT RT"
                                 else:
-                                    result = "✅ WIN RV" if tradeDirection == 'put' else "❌ HIT RV"
+                                    result = "WIN RV" if tradeDirection == 'put' else "HIT RV"
 
                             elif lastCandleCloseValue > tradePrice:
                                 # up
                                 print("Aumentou")
                                 if tradeType == "immediate":
-                                    result = "✅ WIN RT" if tradeDirection == 'call' else "❌ HIT RT"
+                                    result = "WIN RT" if tradeDirection == 'call' else "HIT RT"
                                 else:
-                                    result = "✅ WIN RV" if tradeDirection == 'call' else "❌ HIT RV"
+                                    result = "WIN RV" if tradeDirection == 'call' else "HIT RV"
 
                                 # print("Win") if tradeDirection == 'call' else print("Lose")
                             else:
                                 # draw
                                 print("Igual")
                                 if tradeType == "immediate":
-                                    result = "⚪ DOJI"
+                                    result = "DOJI"
                                 else:
-                                    result = "⚪ DOJI"
+                                    result = "DOJI"
 
                             print(f"Resultado: {result}")
+                            result = (f"✅ {':'.join(tradeTime.split(':')[0:2])} {result}" if "WIN" in result 
+                                        else f"❌ {':'.join(tradeTime.split(':')[0:2])} {result}" if "HIT" in result
+                                        else f"⚪ {':'.join(tradeTime.split(':')[0:2])} {result}"
+                                        )
                             tradesToCheck.pop(tradeIndex)
                             tradeDirectionMessage = "🔴 PUT" if tradeDirection == 'put' else "🟢 CALL"
-                            menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \nDireção: {tradeDirectionMessage}\n⏱️ Horário: {':'.join(tradeTime.split(':')[0:2])}\n📝 Resultado: {result}"
+                            menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \n📍 Direção: {tradeDirectionMessage}\n📝 Resultado: {result}"
                             mensagemListaTransmissao(menssagemResultado)
-                            __updateResultsCallRow(checkedPair, tradeDirection, f"{':'.join(tradeTime.split(':')[0:2])} {result}")
+                            __updateResultsCallRow(checkedPair, tradeDirection, result)
 
             if not (api.check_connect()):
                 api.connect()
@@ -728,8 +747,8 @@ def monitorPairs():
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
             
-            if minute%5==0:
-                print("Monitoring...")
+            if minute%5==0 and seconds == 0:
+                print(f"{currentTime}: Monitoring...")
                 
             if ((upper_limit != None and current_price < upper_limit) and (
                     bottom_limit != None and current_price > bottom_limit)):
@@ -748,6 +767,7 @@ def monitorPairs():
                         else:
                             mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🔴 PUT\n❓ Motivo: Taxa atingida no momento de início do bot\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
                         mensagemListaTransmissao(mensagem)
+                        __updateResultsCallRow(checkedPair, tradeDirection, f"cancelada")
                         continue
 
                     elif (minute == 9 or minute == 4) or (
@@ -824,15 +844,17 @@ def monitorPairs():
 
 if __name__ == '__main__':
     set_start_method("spawn")
+    linhas_taxas = []
     taxas = {}
-
     resultados = ''
     aux_mensagemTransmissao = ''
     mensagemTransmissao = ''
     mensagensEnviadas = []
 
     trades = []
+
     stopThreadSignal = False
+    stopListaTransmissao = False
     scheduledTrades = [[], [], []]
     scheduleSign = threading.Event()
 
@@ -883,7 +905,7 @@ if __name__ == '__main__':
 
         # Messages
         app.add_handler(conv_handler_cadastro)
-        app.add_handler(MessageHandler(filters.ChatType.GROUP & filters.TEXT, handle_message))
+        app.add_handler(MessageHandler(filters.ChatType.GROUP | filters.ChatType.CHANNEL & filters.TEXT, handle_message))
         # Errors
         app.add_error_handler(error)
 

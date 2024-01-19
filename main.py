@@ -589,7 +589,7 @@ def __getCurrentTime():
 Returns:
     str: IQ Option server time on this format H:M:S"""
     time = datetime.now(tz).strftime("%H:%M:%S")
-    if "1:21:" in time:
+    if "14:30:1" in time:
         __updateResultsCallRow(pair='stop')
         stopBot()
     return time
@@ -628,8 +628,14 @@ def __monitorScheduledTrades():
             hour = int(currentTime.split(":")[0])
             minute = int(currentTime.split(":")[1])
             seconds = int(currentTime.split(":")[2])
-            if (minute + 1) % 5 == 0 and seconds == 59:
-                minute = minute + 1 if minute != 59 else 0
+            if (minute+1) % 5 == 0 and seconds == 59:
+
+                if minute == 59:
+                    hour += 1
+                    minute = 0
+                else:
+                    minute+=1
+
                 scheduleTradeTime = f"{hour}:{str(minute).zfill(2)}:00"
                 print(scheduledTrades)
                 info_trade.value = {'type': 'scheduled', 'pair': scheduledTrades[0], 'direction': scheduledTrades[1]}
@@ -660,11 +666,12 @@ def __monitorScheduledTrades():
 def monitorPairs():
     global api
     print("Monitoring pairs...")
+    startTime = __getCurrentTime()
     while True:
         global stopThreadSignal
         if stopThreadSignal:
                 break
-        time.sleep(0.5)
+        time.sleep(0.1)
         if len(taxas) == 0:
             continue
         for monitored_pair in taxas:
@@ -772,6 +779,7 @@ def monitorPairs():
 
                     elif (minute == 9 or minute == 4) or (
                             (minute == 8 and seconds >= 35) or (minute == 3 and seconds >= 35)):
+
                         scheduledTrades[0].append(monitored_pair)
                         scheduledTrades[1].append("put")
                         scheduledTrades[2].append(current_price)
@@ -814,7 +822,7 @@ def monitorPairs():
                         continue
 
                     elif (minute == 9 or minute == 4) or (
-                            (minute == 8 and seconds >= 35) or (minute == 3 and seconds >= 35)):
+                            (minute == 8 and seconds >= 35) or (minute == 3 and seconds >= 35)):   
                         scheduledTrades[0].append(monitored_pair)
                         scheduledTrades[1].append("call")
                         scheduledTrades[2].append(current_price)
@@ -834,6 +842,7 @@ def monitorPairs():
                         aux_hour = int(currentTime.split(":")[0])
                         aux_minutes = int(currentTime.split(":")[1])
                         aux_minutes = aux_minutes - aux_minutes % 5
+                        aux_minutes = aux_minutes+1 if aux_minutes==59 else aux_minutes
 
                         tradesToCheck.append(
                             (monitored_pair, f"{aux_hour}:{aux_minutes}:00", current_price, 'call', 'immediate'))
@@ -868,7 +877,7 @@ if __name__ == '__main__':
         contas = manager.dict()
         tradeEvent = Event()
 
-        startTime = __getCurrentTime()
+        
         print("Starting... teste")
         num_cores = os.cpu_count()
         #print(f"Número de núcleos da CPU: {num_cores}")

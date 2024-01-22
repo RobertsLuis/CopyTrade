@@ -411,18 +411,18 @@ def buy(conta, stake, pair, direction):
 
     direction = direction.casefold()
 
-    api = conta
+    buy_api = conta
     print(pair, stake, direction, 5)
-    completeHour = datetime.fromtimestamp(api.get_server_timestamp()).strftime("%H:%M:%S")
+    completeHour = datetime.fromtimestamp(buy_api.get_server_timestamp()).strftime("%H:%M:%S")
     minutes = int(completeHour.split(":")[1][-1]) % 5
     seconds = math.ceil(float(completeHour.split(":")[2]))
 
     time_to_buy = 5 - minutes if seconds <= 30 else 5 - minutes - 1
     time_to_buy = 5 if time_to_buy == 0 else time_to_buy  # reset to the last option if the option is 0 (0min<30sec -> can't trade)
 
-    check, id = api.buy(stake, pair, direction, time_to_buy)
+    id = buy_api.buy_multi([stake], [pair], [direction], [time_to_buy])
     
-    if check:
+    if id[0] != None:
         # __updateLog(f"TRADE -  {pair} {direction} at {currentPrice}")
         # tradesToCheck.append((id, pair, direction, tradeTime, "immediate"))
         # pendingTrades += 1
@@ -432,7 +432,7 @@ def buy(conta, stake, pair, direction):
         # if not (f"ERROR on digital trade {pair} {direction}" in logText):
         # __updateLog(f"ERROR on digital trade {pair} {direction} at {currentPrice} - {id}, trying binary")
         print(f"ERROR on binary trade {pair} {direction} - {id}, trying digital")
-        check, id = api.buy_digital_spot_v2(pair, stake, direction, 5)
+        check, id = buy_api.buy_digital_spot_v2(pair, stake, direction, 5)
         if check:
             '''__updateLog(f"TRADE -  {pair} {direction} at {currentPrice}")
             tradesToCheck.append((id, pair, direction, tradeTime, "immediate"))
@@ -590,9 +590,8 @@ def __getCurrentTime():
     bots action
 Returns:
     str: IQ Option server time on this format H:M:S"""
-    time = datetime.fromtimestamp(api.get_server_timestamp()).strftime(
-            "%H:%M:%S"
-        )
+    global tz
+    time = datetime.fromtimestamp(api.get_server_timestamp(), tz).strftime("%H:%M:%S")
     if "14:30:1" in time:
         __updateResultsCallRow(pair='stop')
         stopBot()
@@ -669,8 +668,9 @@ def __monitorScheduledTrades():
 
 def monitorPairs():
     global api
-    print("Monitoring pairs...")
+    
     startTime = __getCurrentTime()
+    print(f"{startTime}: Monitoring pairs...")
     while True:
         global stopThreadSignal
         if stopThreadSignal:

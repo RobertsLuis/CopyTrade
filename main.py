@@ -410,38 +410,40 @@ def buy(conta, stake, pair, direction):
     # TEM QUE TER O TRATAMENTO DO TRADETIME
 
     direction = direction.casefold()
+
     api = conta
     print(pair, stake, direction, 5)
-    check, id = api.buy_digital_spot(pair, stake, direction, 5)
+    completeHour = datetime.fromtimestamp(api.get_server_timestamp()).strftime("%H:%M:%S")
+    minutes = int(completeHour.split(":")[1][-1]) % 5
+    seconds = math.ceil(float(completeHour.split(":")[2]))
+
+    time_to_buy = 5 - minutes if seconds <= 30 else 5 - minutes - 1
+    time_to_buy = 5 if time_to_buy == 0 else time_to_buy  # reset to the last option if the option is 0 (0min<30sec -> can't trade)
+
+    check, id = api.buy(stake, pair, direction, time_to_buy)
+    
     if check:
         # __updateLog(f"TRADE -  {pair} {direction} at {currentPrice}")
         # tradesToCheck.append((id, pair, direction, tradeTime, "immediate"))
         # pendingTrades += 1
-        print(f"DIGITAL TRADE -  {pair} {direction}")
+        print(f"BINARY TRADE -  {pair} {direction}")
         # trades.append(f'{pair} {direction}')
     else:
         # if not (f"ERROR on digital trade {pair} {direction}" in logText):
         # __updateLog(f"ERROR on digital trade {pair} {direction} at {currentPrice} - {id}, trying binary")
-        print(f"ERROR on digital trade {pair} {direction} - {id}, trying binary")
-        completeHour = __getCurrentTime()
-        minutes = int(completeHour.split(":")[1][-1]) % 5
-        seconds = math.ceil(float(completeHour.split(":")[2]))
-
-        time_to_buy = 5 - minutes if seconds <= 30 else 5 - minutes - 1
-        time_to_buy = 5 if time_to_buy == 0 else time_to_buy  # reset to the last option if the option is 0 (0min<30sec -> can't trade)
-
-        check, id = api.buy(stake, pair, direction, time_to_buy)
+        print(f"ERROR on binary trade {pair} {direction} - {id}, trying digital")
+        check, id = api.buy_digital_spot_v2(pair, stake, direction, 5)
         if check:
             '''__updateLog(f"TRADE -  {pair} {direction} at {currentPrice}")
             tradesToCheck.append((id, pair, direction, tradeTime, "immediate"))
             pendingTrades += 1'''
 
-            print(f"BINARY TRADE -  {pair} {direction}")
+            print(f"DIGITAL TRADE -  {pair} {direction}")
         #    trades.append(f'{pair} {direction}')
         else:
             # if not (f"ERROR on binary trade {pair} {direction}" in logText):
             # __updateLog(f"ERROR on binary trade {pair} {direction} at {currentPrice} - {id}")
-            print(f"ERROR on binary trade {pair} {direction} - {id}")
+            print(f"ERROR on BINARY AND DIGITAL {pair} {direction} - {id}")
         #        trades.append(f'{pair} {direction} error')
 
 
@@ -558,8 +560,8 @@ def monitorarListaTransmissao():
             mensagemTransmissao = aux_mensagemTransmissao
             aux_mensagemTransmissao = ""
             print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
-        else:
-            print(f"{__getCurrentTime()} Sem mudanças na mensagem")
+        #else:
+        #    print(f"{__getCurrentTime()} Sem mudanças na mensagem")
         if stopListaTransmissao:
             break
 
@@ -588,7 +590,9 @@ def __getCurrentTime():
     bots action
 Returns:
     str: IQ Option server time on this format H:M:S"""
-    time = datetime.now(tz).strftime("%H:%M:%S")
+    time = datetime.fromtimestamp(api.get_server_timestamp()).strftime(
+            "%H:%M:%S"
+        )
     if "14:30:1" in time:
         __updateResultsCallRow(pair='stop')
         stopBot()
@@ -646,7 +650,7 @@ def __monitorScheduledTrades():
 
                 mensagem = f"🎯 TRADE(S) REALIZADA(S) - REVERSÃO M5 🎯\n📊 Transações: \n{scheduledTradesLog}\n⏱️ Horário: {scheduleTradeTime}"
                 mensagemListaTransmissao(mensagem)
-                time.sleep(0.5)
+                time.sleep(0.2)
                 tradeEvent.clear()
 
                 aux_list = list(zip(scheduledTrades[0],  # PAIRS
@@ -658,7 +662,7 @@ def __monitorScheduledTrades():
                                 )
                 # (checkedPair, tradeTime, tradePrice, tradeDirection, tradeType)
                 tradesToCheck.extend(aux_list)
-                time.sleep(3)
+                time.sleep(1)
                 scheduledTrades = [[], [], []]
                 scheduleSign.clear()
 
@@ -685,9 +689,9 @@ def monitorPairs():
                         deltaTCurrentTime = (datetime.strptime(currentTime, "%H:%M:%S") - datetime.strptime(tradeTime,
                                                                                                             "%H:%M:%S")).total_seconds()
 
-                        if deltaTCurrentTime >= 301:
+                        if deltaTCurrentTime >= 305:
 
-                            lastCandle = api.get_candles(checkedPair, 300, 1, time.time())
+                            lastCandle = api.get_candles(checkedPair, 300, 2, time.time())
 
                             lastCandleCloseValue = lastCandle[0]['close']
                             if not(tradeType == "immediate"):
@@ -733,6 +737,7 @@ def monitorPairs():
                             __updateResultsCallRow(checkedPair, tradeDirection, result)
 
             if not (api.check_connect()):
+                print("tentando reconexão")
                 api.connect()
             candle = api.get_candles(monitored_pair, 300, 1, time.time())  # current price
             upper_limit, bottom_limit = None, None
@@ -754,8 +759,8 @@ def monitorPairs():
             minute = int(currentTime[-4])
             seconds = int(currentTime[-2:])
             
-            if minute%5==0 and seconds == 0:
-                print(f"{currentTime}: Monitoring...")
+            if minute%5==0 and seconds <=5:
+                print(f"{currentTime}: Monitoring... {monitored_pair} {current_price}")
                 
             if ((upper_limit != None and current_price < upper_limit) and (
                     bottom_limit != None and current_price > bottom_limit)):
@@ -774,7 +779,7 @@ def monitorPairs():
                         else:
                             mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🔴 PUT\n❓ Motivo: Taxa atingida no momento de início do bot\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
                         mensagemListaTransmissao(mensagem)
-                        __updateResultsCallRow(checkedPair, tradeDirection, f"cancelada")
+                        __updateResultsCallRow(monitored_pair, 'PUT', f"cancelada")
                         continue
 
                     elif (minute == 9 or minute == 4) or (
@@ -791,7 +796,7 @@ def monitorPairs():
                     else:
                         info_trade.value = {'type': 'immediate', 'pair': monitored_pair, 'direction': 'put'}
                         tradeEvent.set()
-                        time.sleep(0.3)
+                        time.sleep(0.2)
                         tradeEvent.clear()
                         info_trade.value = {'type': '', 'pair': '', 'direction': ''}
                         trades.append(f"{monitored_pair} put")
@@ -819,6 +824,7 @@ def monitorPairs():
                         else:
                             mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🟢 CALL\n❓ Motivo: Taxa atingida no momento de início do bot\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
                         mensagemListaTransmissao(mensagem)
+                        __updateResultsCallRow(monitored_pair, 'CALL', f"cancelada")
                         continue
 
                     elif (minute == 9 or minute == 4) or (
@@ -835,7 +841,7 @@ def monitorPairs():
                         info_trade.value = {'type': 'immediate', 'pair': monitored_pair, 'direction': 'call'}
                         tradeEvent.set()
                         mensagem = f"🎯 TRADE REALIZADA - RETRAÇÃO M5 🎯\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🟢 CALL\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
-                        time.sleep(0.3)
+                        time.sleep(0.2)
                         tradeEvent.clear()
                         trades.append(f"{monitored_pair} call")
 
@@ -855,6 +861,7 @@ if __name__ == '__main__':
     set_start_method("spawn")
     linhas_taxas = []
     taxas = {}
+
     resultados = ''
     aux_mensagemTransmissao = ''
     mensagemTransmissao = ''

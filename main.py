@@ -572,17 +572,16 @@ def startBot():
     thread_transmissao.start()
 
 def stopBot():
-    global stopThreadSignal, stopListaTransmissao, resultados, thread_pares, thread_agendamentos, thread_transmissao
+    global stopThreadSignal, stopListaTransmissao, resultados, thread_pares, thread_agendamentos, thread_transmissao, aux_mensagemTransmissao
     print("Stopping...")
     stopThreadSignal = True
     time.sleep(1)
-    scoreBoard = f"✅ {resultados.count('✅')} | ❌ {resultados.count('✅')} | ⚪ {resultados.count('⚪')}"
+    scoreBoard = f"✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
     mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n\n{resultados}\n\n{scoreBoard}"
     mensagemListaTransmissao(mensagemFinal)
 
     time.sleep(11)
     stopListaTransmissao = True
-
     sys.exit()
 
 def __getCurrentTime():

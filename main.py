@@ -65,9 +65,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
     # Beep the person who called this alarm:
-    global mensagemTransmissao, mensagensEnviadas
-    if not (f"{context.job.chat_id}: {mensagemTransmissao}" in mensagensEnviadas) and mensagemTransmissao != '':
-        await context.bot.send_message(chat_id=context.job.chat_id, text=f'{mensagemTransmissao}')
+    global mensagemTransmissao, mensagensEnviadas, contasStopadas
+    if not (f"{context.job.chat_id}: {mensagemTransmissao}" in mensagensEnviadas) and mensagemTransmissao != [] and not context.job.data in contasStopadas:
+        mensagemParaEnviar = ""
+        mensagensFiltradas = [message for message in mensagemTransmissao if not("PRIVATE MESSAGE" in mensagemTransmissao) or ("PRIVATE MESSAGE" in mensagemTransmissao and context.job.data in message)]
+        print(context.job.data, mensagensFiltradas)
+        if len(mensagensFiltradas)>1:
+            for i,info in enumerate(mensagensFiltradas):
+                info = info.split(":")[1] if "PRIVATE MESSAGE" in info else info
+                mensagemParaEnviar +=f"\n\n{'-' * 43}\n\n{info}" if i > 0 else f"{info}"
+        else:
+            mensagemParaEnviar  = mensagensFiltradas[0]
+        
+        await context.bot.send_message(chat_id=context.job.chat_id, text=f'{mensagemParaEnviar}')
+        if "Stop Win" or "Stop Loss" in mensagemParaEnviar:
+            contasStopadas.append(context.job.data) 
         mensagensEnviadas.append(f"{context.job.chat_id}: {mensagemTransmissao}")
     # context.user_data['messagesReceived'] += f' {mensagemTransmissao}'
 
@@ -304,14 +316,14 @@ async def confirmacao_config_handler(update: Update, context: ContextTypes.DEFAU
             'stop_win': context.user_data['stop_win'],
             'stop_loss': context.user_data['stop_loss'],
         }
-        x = Process(target=aguardar_compra, args=(informacoes_conta, tradeEvent, info_trade, contas, buy, buy_multi))
+        x = Process(target=aguardar_compra, args=(informacoes_conta, tradeEvent, info_trade, contas, buy, buy_multi, monitorStopThread))
         x.start()
         contas[informacoes_conta['email']] = True
 
-        name = update.effective_chat.full_name
+        email = informacoes_conta['email']
         chat_id = update.message.chat_id
 
-        context.job_queue.run_repeating(listaDeTransmissao, data=name, chat_id=chat_id, interval=1, first=1)
+        context.job_queue.run_repeating(listaDeTransmissao, data=email, chat_id=chat_id, interval=1, first=1)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
                                        reply_markup=ReplyKeyboardRemove())
         print(f"{showConfigs(context)}")
@@ -350,8 +362,27 @@ def connect_and_buy(email, password, buy_event, tradeInfo):
     else:
         print(f"Falha ao conectar: {email} \nmotivo:{reason}")
 
+def monitorStopThread(conta, informacoes_conta, sinal):
+    global mensagemListaTransmissao
+    while True:
+        time.sleep(5)
+        print(f"Monitorando stops {informacoes_conta['email']}")
+        banca_atual = conta.get_balance()
+        if banca_atual>=informacoes_conta['stop_win']:
+            print(f"Stop win: {informacoes_conta['email']}")
+            sinal.set()
+            mensagemStop = f"PRIVATE MESSAGE {informacoes_conta['email']}: Stop Win Atingido!"
+            mensagemListaTransmissao(mensagemStop)
+            break
+        if banca_atual<=informacoes_conta['stop_loss']:
+            print(f"Stop loss: {informacoes_conta['email']}")
+            sinal.set()
+            mensagemStop = f"PRIVATE MESSAGE {informacoes_conta['email']}: Stop Loss Atingido!"
+            mensagemListaTransmissao(mensagemStop)
+            break
 
-def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_compra, func_compra_multi):
+
+def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_compra, func_compra_multi, func_monitorStops):
     acc_api = IQ_Option(informacoes_conta['email'], informacoes_conta['senha'])
     check, reason = acc_api.connect()
     acc_trades = []
@@ -359,21 +390,27 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
         acc_api.change_balance('REAL') if informacoes_conta['tipo_conta'] == 'REAL' else acc_api.change_balance(
             'PRACTICE')
         acc_banca_inicial = acc_api.get_balance()
-        acc_stake = informacoes_conta['stake'] if informacoes_conta['modo_config'] == 'Valor' else round(
-            acc_banca_inicial * informacoes_conta['stake'] / 100, 2)
-        print(f'Stake definida: {informacoes_conta["email"]} - {acc_stake}')
+        acc_stake = informacoes_conta['stake'] if informacoes_conta['modo_config'] == 'Valor' else round(acc_banca_inicial * informacoes_conta['stake'] / 100, 2)
+        acc_stopWin = acc_stopLoss = acc_banca_inicial
+        acc_stopWin += informacoes_conta['stop_win'] if informacoes_conta['modo_config'] == 'Valor' else round(acc_banca_inicial * informacoes_conta['stop_win'] / 100, 2)
+        acc_stopLoss += informacoes_conta['stop_loss'] if informacoes_conta['modo_config'] == 'Valor' else round(acc_banca_inicial * informacoes_conta['stop_loss'] / 100, 2)
+        print(f'Infos:\nEmail: {informacoes_conta["email"]}\nStake {acc_stake}\nStop win {acc_stopWin}\nStop loss {acc_stopLoss}')
+        stop_signal = Event()
+        stop_thread = threading.Thread(target=func_monitorStops, args=(acc_api,informacoes_conta, stop_signal,))
+        
         while True:
             if not (acc_api.check_connect()):
                 acc_api.connect()
-            if not (contas[informacoes_conta['email']]):
+            if not (contas[informacoes_conta['email']]) or stop_signal.is_set():
                 break
+
             sinal_compra.wait()
+            stop_thread.start()
             infos_compra_atualizadas = info_compra.value
 
             if infos_compra_atualizadas['type'] == 'immediate':
                 if not (f"{infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}" in acc_trades):
-                    func_compra(acc_api, acc_stake, infos_compra_atualizadas['pair'],
-                                infos_compra_atualizadas['direction'])
+                    func_compra(acc_api, acc_stake, infos_compra_atualizadas['pair'], infos_compra_atualizadas['direction'])
                     acc_trades.append(f"{infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}")
 
             else:
@@ -390,9 +427,9 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
                                             enumerate(infos_compra_atualizadas['pair'])]))
 
             print(acc_trades)
-
             time.sleep(0.1)
 
+        print(f"Stop monitoring pairs: {informacoes_conta['email']}")
 
 def buy(conta, stake, pair, direction):
     """Does the trade and add the trade informations on log
@@ -549,7 +586,7 @@ async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
 
 def mensagemListaTransmissao(mensagem):
     global aux_mensagemTransmissao
-    aux_mensagemTransmissao += f"\n\n{'-' * 43}\n\n{mensagem}" if aux_mensagemTransmissao != "" else f"{mensagem}"
+    aux_mensagemTransmissao.append(mensagem)
 
 
 def monitorarListaTransmissao():
@@ -558,8 +595,8 @@ def monitorarListaTransmissao():
         global aux_mensagemTransmissao, mensagemTransmissao, stopListaTransmissao
         if aux_mensagemTransmissao != mensagemTransmissao and aux_mensagemTransmissao != "":
             mensagemTransmissao = aux_mensagemTransmissao
-            aux_mensagemTransmissao = ""
-            print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
+            aux_mensagemTransmissao = []
+            #print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
         #else:
         #    print(f"{__getCurrentTime()} Sem mudanças na mensagem")
         if stopListaTransmissao:
@@ -862,9 +899,10 @@ if __name__ == '__main__':
     taxas = {}
 
     resultados = ''
-    aux_mensagemTransmissao = ''
-    mensagemTransmissao = ''
+    aux_mensagemTransmissao = []
+    mensagemTransmissao = []
     mensagensEnviadas = []
+    contasStopadas = []
 
     trades = []
 

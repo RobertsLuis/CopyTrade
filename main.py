@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import telegram
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardButton, \
     InlineKeyboardMarkup

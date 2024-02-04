@@ -21,7 +21,7 @@ botUsername = "@wzTaxa_bot"
 tz = pytz.timezone('America/Sao_Paulo')
 
 # TEM QUE TER THREAD PARA VERIFICAR EM TODAS AS CONTAS SE TEM STOP WIN OU STOP LOSS
-
+#TODO MONTAR UMA LÓGICA PARA ENVIAR INFORMAÇÕES DE CONTAS QUE PEDIRAM PARA SER STOPADAS ABRUPTAMENTE -> 
 MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG = range(
     9)
 
@@ -70,6 +70,40 @@ async def partial_result_command(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text(f"{partial_result}", reply_markup=ReplyKeyboardRemove())
 
     # Definindo o estado para a etapa do menu
+    return ConversationHandler.END
+
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global resultados
+    partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+    keyboard = [
+        [KeyboardButton("Parar bot")],
+        [KeyboardButton("Continuar operando")]
+    ]
+    stopBotMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    # Enviando a mensagem com o menu
+    await update.message.reply_text(f"Tem certeza que deseja parar?\n\n{partial_result}", reply_markup=stopBotMenu, parse_mode='Markdown')
+
+    # Definindo o estado para a etapa do menu
+    return ConversationHandler.END
+
+async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Obtendo a escolha do usuário
+    user_choice = update.message.text.lower()
+
+    if user_choice == 'parar bot':
+        # Pedindo que o usuário forneça o email
+        contas[context.user_data['email']] = False
+
+        await update.message.reply_text("Ok, bot parado")
+        # Definindo o estado para a etapa do email no cadastro
+        return CODIGO_BOT
+    elif user_choice == 'continuar operando':
+        await update.message.reply_text("Ok, nenhuma alteração foi feita")
+    else:
+        # Opção inválida, reinicie a conversa
+        #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
+        pass
+    # Reiniciando a conversa
     return ConversationHandler.END
 
 async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
@@ -459,7 +493,7 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
                 acc_api.connect()
 
             sinal_compra.wait()
-            if not (contas[informacoes_conta['email']]) or stop_signal.is_set():
+            if not(contas[informacoes_conta['email']]) or stop_signal.is_set():
                 break
             infos_compra_atualizadas = info_compra.value
 

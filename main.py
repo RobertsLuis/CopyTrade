@@ -22,8 +22,7 @@ tz = pytz.timezone('America/Sao_Paulo')
 
 # TEM QUE TER THREAD PARA VERIFICAR EM TODAS AS CONTAS SE TEM STOP WIN OU STOP LOSS
 #TODO MONTAR UMA LÓGICA PARA ENVIAR INFORMAÇÕES DE CONTAS QUE PEDIRAM PARA SER STOPADAS ABRUPTAMENTE -> 
-MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG = range(
-    9)
+MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG, MENU_STOP = range(10)
 
 
 # Comandos
@@ -48,7 +47,7 @@ def showConfigs(context):
     return "\n".join(linhas)
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def main_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(context.user_data)
     keyboard = [
         [KeyboardButton("Iniciar Bot")],
@@ -65,53 +64,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def partial_result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global resultados
     partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
-
     # Enviando a mensagem com o menu
     await update.message.reply_text(f"{partial_result}", reply_markup=ReplyKeyboardRemove())
-
     # Definindo o estado para a etapa do menu
     return ConversationHandler.END
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global resultados
-    partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
-    keyboard = [
-        [KeyboardButton("Parar bot")],
-        [KeyboardButton("Continuar operando")]
-    ]
-    stopBotMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-    # Enviando a mensagem com o menu
-    await update.message.reply_text(f"Tem certeza que deseja parar?\n\n{partial_result}", reply_markup=stopBotMenu, parse_mode='Markdown')
-
     # Definindo o estado para a etapa do menu
-    return ConversationHandler.END
-
-async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Obtendo a escolha do usuário
-    user_choice = update.message.text.lower()
-
-    if user_choice == 'parar bot':
-        # Pedindo que o usuário forneça o email
-        contas[context.user_data['email']] = False
-
-        await update.message.reply_text("Ok, bot parado")
-        # Definindo o estado para a etapa do email no cadastro
-        return CODIGO_BOT
-    elif user_choice == 'continuar operando':
-        await update.message.reply_text("Ok, nenhuma alteração foi feita")
-    else:
-        # Opção inválida, reinicie a conversa
-        #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
-        pass
-    # Reiniciando a conversa
-    return ConversationHandler.END
+    print('set')
+    return MENU_STOP
 
 async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
     # Beep the person who called this alarm:
     global mensagemTransmissao, mensagensEnviadas, contasStopadas
-    if mensagemTransmissao != [] and not(context.job.data in contasStopadas) and not(f"{context.job.chat_id}: {mensagemTransmissao}" in mensagensEnviadas):
+    if mensagemTransmissao != [] and not(context.job.data['email'] in contasStopadas) and not(f"{context.job.chat_id}: {mensagemTransmissao}" in mensagensEnviadas):
         mensagemParaEnviar = ""
-        mensagensFiltradas = [message for message in mensagemTransmissao if not("PRIVATE MESSAGE" in message) or ("PRIVATE MESSAGE" in message and context.job.data in message)]
+        mensagensFiltradas = [message for message in mensagemTransmissao if not("PRIVATE MESSAGE" in message) or ("PRIVATE MESSAGE" in message and context.job.data['email'] in message)]
         if len(mensagensFiltradas) == 0:
             pass
         else:
@@ -121,38 +89,64 @@ async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
                 for i,info in enumerate(mensagensFiltradas):
                     info = info.split(":")[1] if "PRIVATE MESSAGE" in info else info
                     mensagemParaEnviar +=f"\n\n{'-' * 43}\n\n{info}" if i > 0 else f"{info}"
-            await context.bot.send_message(chat_id=context.job.chat_id, text=f'{mensagemParaEnviar}')
+            if "📝 RESULTADOS" in mensagemParaEnviar:
+                linha_resultado = mensagemParaEnviar.split("\n")[-1]
+                lucro = round((context.job.data['stake']*linha_resultado.count('✅'))*0.85,2)
+                prejuizo = context.job.data['stake']*linha_resultado.count('❌')
+                await context.bot.send_message(chat_id=context.job.chat_id, 
+                                               text=f"{mensagemParaEnviar}\n\nSua stake: R${context.job.data['stake']}\nPayout Médio: 85%\nResultado diário: R${lucro-prejuizo}")
+            else:
+                await context.bot.send_message(chat_id=context.job.chat_id, text=f'{mensagemParaEnviar}')
             if "Stop Win" in mensagemParaEnviar or "Stop Loss" in mensagemParaEnviar:
-                contasStopadas.append(context.job.data)
-        print("Conta: {} | Mensagens filtradas: {} | Mensagem para enviar: {}".format(context.job.data, mensagensFiltradas, mensagemParaEnviar))
+                contasStopadas.append(context.job.data['email'])
+        print("Conta: {} | Mensagens filtradas: {} | Mensagem para enviar: {}".format(context.job.data['email'], mensagensFiltradas, mensagemParaEnviar))
         mensagensEnviadas.append(f"{context.job.chat_id}: {mensagemTransmissao}")
     # context.user_data['messagesReceived'] += f' {mensagemTransmissao}'
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_chat.full_name
-    chat_id = update.message.chat_id
-
-    context.job_queue.run_repeating(listaDeTransmissao, data=name, chat_id=chat_id, interval=0.1, first=5)
-    await update.message.reply_text("Inscrito na sequência", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Link ytb como usar\nCaso tenha algum outro problema que não esteja presente no vídeo, entre em contato com @Winnerzone_83", reply_markup=ReplyKeyboardRemove())
 
 
 # Função para lidar com a escolha no menu
 async def menu_options_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global resultados
     # Obtendo a escolha do usuário
     user_choice = update.message.text.lower()
 
     if user_choice == 'iniciar bot':
         # Pedindo que o usuário forneça o email
-        reply_markup = ReplyKeyboardRemove()
-        await update.message.reply_text(
-            "Ok! Antes disso, forneça o seu código do bot da WZ. (Esse código foi passado para você no momento da compra da licença)",
-            reply_markup=reply_markup)
-        # Definindo o estado para a etapa do email no cadastro
-        return CODIGO_BOT
+        try:
+            if contas[context.user_data['email']] == True:
+                await update.message.reply_text(f"Você já tem um bot rodando nesse chat, não é permitido iniciar 2 contas ao mesmo tempo", reply_markup=ReplyKeyboardRemove())
+                return ConversationHandler.END
+        except:
+
+            await update.message.reply_text("Ok! Antes disso, forneça o seu código do bot da WZ. (Esse código foi passado para você no momento da compra da licença)", reply_markup=ReplyKeyboardRemove())
+            # Definindo o estado para a etapa do email no cadastro
+            return CODIGO_BOT
     elif user_choice == 'suporte':
         await update.message.reply_text(
             "Link ytb como usar\nCaso tenha algum outro problema que não esteja presente no vídeo, entre em contato com @Winnerzone_83")
+    elif user_choice == 'ver placar':
+        
+        partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+
+        # Enviando a mensagem com o menu
+        await update.message.reply_text(f"{partial_result}", reply_markup=ReplyKeyboardRemove())
+
+        # Definindo o estado para a etapa do menu
+        return ConversationHandler.END
+    elif user_choice == 'parar bot':
+        partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+        keyboard = [
+            [KeyboardButton("Parar bot")],
+            [KeyboardButton("Continuar operando")]
+        ]
+        stopBotMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    # Enviando a mensagem com o menu
+        await update.message.reply_text(f"Tem certeza que deseja parar?\n\n{partial_result}", reply_markup=stopBotMenu)
+        return MENU_STOP
     else:
         # Opção inválida, reinicie a conversa
         #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
@@ -162,6 +156,13 @@ async def menu_options_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [KeyboardButton("Iniciar Bot")],
+        [KeyboardButton("Ver placar")],
+        [KeyboardButton("Parar Bot")],
+        [KeyboardButton("Suporte")]
+    ]
+    mainMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
     # Obtendo o email do usuário
     codigo = update.message.text
 
@@ -192,11 +193,11 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             email = informacoes_conta['email']
             chat_id = update.message.chat_id
 
-            context.job_queue.run_repeating(listaDeTransmissao, data=email, chat_id=chat_id, interval=1, first=1)
+            context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
-                                        reply_markup=ReplyKeyboardRemove())
+                                        reply_markup=mainMenu)
             print(f"{showConfigs(context)}")
-            return ConversationHandler.END
+            return MENU_OPTIONS
         elif codigo == 'teste2':
             context.user_data['trades'] = []
             informacoes_conta = {
@@ -217,15 +218,15 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             context.job_queue.run_repeating(listaDeTransmissao, data=email, chat_id=chat_id, interval=1, first=1)
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
-                                        reply_markup=ReplyKeyboardRemove())
+                                        reply_markup=mainMenu)
             print(f"{showConfigs(context)}")
-            return ConversationHandler.END
+            return MENU_OPTIONS
 
         await update.message.reply_text(f"Código validado com sucesso!\n\nAgora, digite a sua senha da IQ OPTION")
         return CADASTRO_SENHA
     else:
         await update.message.reply_text(f"Código incorreto. Por favor tente novamente ou entre em contato com o suporte")
-        return CODIGO_BOT
+        return CODIGO_BOT 
     # Logica para validação do código pelo BD!
     # ...
     # retorna para o usuário o e-mail que está associoado ao código dele (no BD) para ele fazer login na IQ OPTION e sinaliza que caso queira trocar o e-mail da IQ Option, entre em contato com o suporte
@@ -233,10 +234,41 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Pede a senha dele para entrar na IQ Option
     # await update.message.reply_text(f"")
     # Definindo o estado para a etapa da senha no cadastro
-    
+async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print('here')
+    # Obtendo a escolha do usuário
+    user_choice = update.message.text.lower()
+    print(user_choice)
+    if user_choice == 'parar bot':
+        # Pedindo que o usuário forneça o email
+        try:
+            contas[context.user_data['email']] = False
+            await update.message.reply_text("Ok, bot parado com sucesso!", reply_markup=ReplyKeyboardRemove())
+        except:
+             await update.message.reply_text("Seu bot já estava parado, nenhuma alteração foi feita.", reply_markup=ReplyKeyboardRemove())
+        # Definindo o estado para a etapa do email no cadastro
+        return ConversationHandler.END
+    elif user_choice == 'continuar operando':
+        await update.message.reply_text("Ok, nenhuma alteração foi feita.", reply_markup=ReplyKeyboardRemove())
+    else:
+        # Opção inválida, reinicie a conversa
+        #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
+        pass
+    # Reiniciando a conversa
+    return ConversationHandler.END   
+
+def fazer_login(email, senha, pending_login_accs):
+    print(f"INSIDE LOGIN PROCESS - Tentativa de login: {email} {senha}")
+    acc = IQ_Option(email, senha)
+    acc_check, acc_reason = acc.connect()
+    print(pending_login_accs)
+    pending_login_accs[email] = (acc_check, acc_reason)
+    print(f"INSIDE LOGIN PROCESS - Tentativa finalizada: {email} {acc_check} {acc_reason}")
 
 # Função para lidar com o fornecimento da senha
 async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    
     # Obtendo a senha do usuário
     senha = update.message.text
 
@@ -245,9 +277,29 @@ async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # Realizando qualquer ação necessária com as informações coletadas
     # ...
-    context.user_data['api'] = IQ_Option(context.user_data['email'], context.user_data['senha'])
-    bot_check, bot_reason = context.user_data['api'].connect()
+    print(context.user_data['email'], context.user_data['senha'])
+    #api = IQ_Option(context.user_data['email'], context.user_data['senha'])
+    manager = Manager()
+    pending_login_accs = manager.dict()
+    login_p = Process(target=fazer_login, args=(context.user_data['email'], context.user_data['senha'],pending_login_accs,))
+    login_p.start()
+    result = False
+    tries = 0
+    while not(result):
+        try:
+            bot_check, bot_reason = pending_login_accs[context.user_data['email']]
+            result = True
+        except:
+            tries +=1
+            if tries>=5:
+                bot_reason = "Timeout on IQ Option login reached"
+                bot_check = False
+        time.sleep(1)
+    login_p.terminate()
+    print(bot_check, bot_reason)
+    
     if bot_check:
+        context.user_data['api'] = IQ_Option(context.user_data['email'], context.user_data['senha'])
         keyboard = [
             [KeyboardButton("REAL")],
             [KeyboardButton("DEMO")],
@@ -260,12 +312,12 @@ async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Informando ao usuário que o processo foi concluído
     else:
         if 'invalid_credentials' in bot_reason:
-            await update.message.reply_text(f"E-mail ou senha incorretos.")
+            await update.message.reply_text(f"Senha incorreta.")
         else:
             await update.message.reply_text(f"Erro ao realizar login. {bot_reason}")
         # Reiniciando a conversa
         await context.bot.send_message(chat_id=update.effective_chat.id,
-                                       text=f"Digite novamente a senha associada ao e-mail X para tentar efetuar o login novamente")
+                                       text=f"Digite novamente a senha associada ao e-mail {context.user_data['email']} para tentar efetuar o login novamente")
         return CADASTRO_SENHA
 
 
@@ -280,17 +332,19 @@ async def real_demo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if 'demo' in tipo_conta:
         context.user_data['tipo_conta'] = 'DEMO'
-        '''context.user_data['api'].change_balance('PRACTICE')
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Você escolheu operar na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())'''
+        #context.user_data['api'].change_balance('PRACTICE')
+        
+        #await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Você escolheu operar na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())
     elif 'real' in tipo_conta:
         context.user_data['tipo_conta'] = 'REAL'
-        '''context.user_data['api'].change_balance('REAL')
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Você escolheu operar na conta REAL.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())'''
+        #context.user_data['api'].change_balance('REAL')
+        #print(context.user_data['api'].get_balance())
+        #await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Você escolheu operar na conta REAL.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())
     else:
         context.user_data['tipo_conta'] = 'DEMO'
-        '''context.user_data['api'].change_balance('PRACTICE')
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Como não entendi sua resposta, o login foi feito na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())'''
-
+        #context.user_data['api'].change_balance('PRACTICE')
+        #print(context.user_data['api'].get_balance())
+        #await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Como não entendi sua resposta, o login foi feito na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())
     # context.user_data['banca_inicial'] = context.user_data['api'].get_balance()
 
     keyboard = [
@@ -715,9 +769,9 @@ def stopBot(motivo):
     time.sleep(1)
     scoreBoard = f"✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
     if motivo == "Timeout":
-        mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n\n{resultados}\n\n{scoreBoard}"
+        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}\n\n{scoreBoard}"
     else:
-        mensagemFinal = f"📝 RESULTADOS {datetime.now(tz).strftime('%d/%m/%Y')} 📝\n\n{resultados}\n\n{scoreBoard}\n\nMotivo de parada: {motivo}"
+        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}\n\n{scoreBoard}\n\nMotivo de parada: {motivo}"
     mensagemListaTransmissao(mensagemFinal)
 
     time.sleep(11)
@@ -1036,6 +1090,7 @@ if __name__ == '__main__':
         thread_transmissao = threading.Thread(target=monitorarListaTransmissao, args=(aux_mensagemTransmissao,))
         
         contas = manager.dict()
+        
         tradeEvent = Event()
 
         
@@ -1046,7 +1101,7 @@ if __name__ == '__main__':
         check, reason = api.connect()
         print('Bot connected!')
         print(api.get_balance())
-
+        check, reason = None, None
         app = Application.builder().token(token).build()
         '''job_queue = app.job_queue
 
@@ -1064,13 +1119,14 @@ if __name__ == '__main__':
                 CONFIG_STAKE: [MessageHandler(filters.TEXT & ~filters.COMMAND, stake_handler)],
                 STOP_WIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, stop_win_handler)],
                 STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, stop_loss_handler)],
-                CONFIRMACAO_CONFIG: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmacao_config_handler)]
+                CONFIRMACAO_CONFIG: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirmacao_config_handler)],
+                MENU_STOP: [MessageHandler(filters.TEXT & ~filters.COMMAND, menu_stop_handler)]
             },
             # REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STAKE, STOP_WIN, STOP_LOSS
             fallbacks=[],
         )
 
-        app.add_handler(CommandHandler('start', start_command))
+        app.add_handler(CommandHandler('menu', main_menu_command))
         app.add_handler(CommandHandler('help', help_command))
 
         # Messages

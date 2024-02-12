@@ -22,7 +22,7 @@ tz = pytz.timezone('America/Sao_Paulo')
 
 # TEM QUE TER THREAD PARA VERIFICAR EM TODAS AS CONTAS SE TEM STOP WIN OU STOP LOSS
 #TODO MONTAR UMA LÓGICA PARA ENVIAR INFORMAÇÕES DE CONTAS QUE PEDIRAM PARA SER STOPADAS ABRUPTAMENTE -> 
-MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG, MENU_STOP = range(10)
+MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, TRADE_MODE,CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG, MENU_STOP = range(11)
 
 
 # Comandos
@@ -51,6 +51,8 @@ async def main_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(context.user_data)
     keyboard = [
         [KeyboardButton("Iniciar Bot")],
+        [KeyboardButton("Ver placar")],
+        [KeyboardButton("Parar Bot")],
         [KeyboardButton("Suporte")]
     ]
     mainMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
@@ -74,29 +76,139 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print('set')
     return MENU_STOP
 
+def resultado_separado(trade_rv, mensagem):
+    aux_finalMessage = mensagem.split("\n")
+    
+    for i,line in enumerate(aux_finalMessage):
+        if line.startswith("M5"):
+            spaces = len(line.split(' '))
+            if trade_rv == True:
+                if '*' in line:
+                    spaces = len(line.split(' '))
+                    line = line.replace("*", "")
+                    if spaces == 9:
+                        aux_finalMessage[i] = " ".join(line.split(" ")[0:4]+line.split(" ")[5:])
+                    else:
+                        aux_finalMessage[i] = " ".join(line.split(" ")[0:4]+line.split(" ")[8:])
+            else:
+                if '*' in line:
+                    #print(line)
+                    spaces = len(line.split(' '))
+                    line = line.replace("*", "")
+                    if spaces == 9:
+                        aux_finalMessage[i] = " ".join(line.split(" ")[0:5])
+                    else:
+                        aux_finalMessage[i] = " ".join(line.split(" ")[0:8])
+
+    return aux_finalMessage
+
+
 async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
     # Beep the person who called this alarm:
     global mensagemTransmissao, mensagensEnviadas, contasStopadas
     if mensagemTransmissao != [] and not(context.job.data['email'] in contasStopadas) and not(f"{context.job.chat_id}: {mensagemTransmissao}" in mensagensEnviadas):
+        
+
         mensagemParaEnviar = ""
-        mensagensFiltradas = [message for message in mensagemTransmissao if not("PRIVATE MESSAGE" in message) or ("PRIVATE MESSAGE" in message and context.job.data['email'] in message)]
+        mensagensFiltradas = []
+        for titulo, mensagem in mensagemTransmissao:
+            match titulo:
+                #🎯 TRADE REALIZADA - RETRAÇÃO M5 🎯 NÃO PRECISA DE TRATAMENTO
+                #🎯 TRADE(S) REALIZADA(S) - REVERSÃO M5 🎯 V
+                #⏱️ TRADE AGENDADA - REVERSÃO M5 ⏱️ V
+                #🎯 RESULTADO DA TRADE 🎯 V
+                #🔐 MENSAGEM PRIVADA 🔐 V
+                case '🔐 MENSAGEM PRIVADA 🔐':
+                    if context.job.data['email'] in mensagem:
+                        mensagensFiltradas.append(mensagem)
+                case '⏱️ TRADE AGENDADA - REVERSÃO M5 ⏱️':
+                    if context.job.data['trade_rv'] == False:
+                        mensagensFiltradas.append(mensagem.replace('⏱️ TRADE AGENDADA - REVERSÃO M5 ⏱️','🎯 TRADE REALIZADA - RETRAÇÃO M5 🎯'))
+                    else:
+                        mensagensFiltradas.append(mensagem)
+                case '🎯 TRADE(S) REALIZADA(S) - REVERSÃO M5 🎯':
+                    if context.job.data['trade_rv'] == True:
+                        mensagensFiltradas.append(mensagem)
+                case '🎯 RESULTADO DA TRADE 🎯':
+                    if 'RT*' in mensagem.split("\n")[-1]:
+                        if context.job.data['trade_rv'] == False:
+                            mensagensFiltradas.append(mensagem)
+                    elif 'RV' in mensagem.split("\n")[-1]:
+                        if context.job.data['trade_rv'] == True:
+                            mensagensFiltradas.append(mensagem)
+                    else:
+                        mensagensFiltradas.append(mensagem)
+                case '🚨 TRADE CANCELADA 🚨':
+                    if "Motivo: Taxa atingida no fechamento da vela" in mensagem:
+                        if context.job.data['trade_rv'] == False:
+                            mensagensFiltradas.append(mensagem)
+                    else:
+                        mensagensFiltradas.append(mensagem)
+                case _:
+                    mensagensFiltradas.append(mensagem)
+
         if len(mensagensFiltradas) == 0:
             pass
         else:
+            trades_canceladas = ''
             if len(mensagensFiltradas)==1:
-                mensagemParaEnviar  = mensagensFiltradas[0].split(":")[1] if "PRIVATE MESSAGE" in mensagensFiltradas[0] else mensagensFiltradas[0]
+                mensagemParaEnviar  = mensagensFiltradas[0]
             elif len(mensagensFiltradas)>1:
                 for i,info in enumerate(mensagensFiltradas):
-                    info = info.split(":")[1] if "PRIVATE MESSAGE" in info else info
+                    if "🚨 TRADE CANCELADA 🚨" in info:    
+                        trades_canceladas += " ".join(info.split("\n")[1:4])
+                    elif " ".join(info.split('\n')[1:4]) in trades_canceladas:        
+                        continue
                     mensagemParaEnviar +=f"\n\n{'-' * 43}\n\n{info}" if i > 0 else f"{info}"
-            if "📝 RESULTADOS" in mensagemParaEnviar:
-                linha_resultado = mensagemParaEnviar.split("\n")[-1]
-                lucro = round((context.job.data['stake']*linha_resultado.count('✅'))*0.85,2)
-                prejuizo = context.job.data['stake']*linha_resultado.count('❌')
-                await context.bot.send_message(chat_id=context.job.chat_id, 
-                                               text=f"{mensagemParaEnviar}\n\nSua stake: R${context.job.data['stake']}\nPayout Médio: 85%\nResultado diário: R${lucro-prejuizo}")
-            else:
+            
+            if not("📝 RESULTADOS" in mensagemParaEnviar):
                 await context.bot.send_message(chat_id=context.job.chat_id, text=f'{mensagemParaEnviar}')
+            else:
+                aux_finalMessage = mensagemParaEnviar.split('\n')
+                for i,line in enumerate(aux_finalMessage):
+                    if line.startswith("M5"):
+                        spaces = len(line.split(' '))
+                        if context.job.data['trade_rv'] == True:
+                            if '*' in line:
+                                spaces = len(line.split(' '))
+                                line = line.replace("*", "")
+                                if spaces == 9:
+                                    aux_finalMessage[i] = " ".join(line.split(" ")[0:4]+line.split(" ")[5:])
+                                else:
+                                    aux_finalMessage[i] = " ".join(line.split(" ")[0:4]+line.split(" ")[8:])
+                        else:
+                            if '*' in line:
+                                #print(line)
+                                spaces = len(line.split(' '))
+                                line = line.replace("*", "")
+                                if spaces == 9:
+                                    aux_finalMessage[i] = " ".join(line.split(" ")[0:5])
+                                else:
+                                    aux_finalMessage[i] = " ".join(line.split(" ")[0:8])
+                #aux_finalMessage.pop(-1)
+                try:
+                    for message in str(aux_finalMessage).split('-'*43):
+                        if '📝 RESULTADOS' in message:
+                            results_aux_finalMessage = message
+                except:
+                    results_aux_finalMessage = str(aux_finalMessage)
+                    
+                acc_wins = results_aux_finalMessage.count('✅')
+                acc_loses = results_aux_finalMessage.count('❌')
+                acc_dojis =results_aux_finalMessage.count('⚪')
+                aux_finalMessage.append(f"\n✅ {acc_wins} | ❌ {acc_loses} | ⚪ {acc_dojis}")
+                
+                mensagemParaEnviar = '\n'.join(aux_finalMessage)
+                await context.bot.send_message(chat_id=context.job.chat_id, text=f"{mensagemParaEnviar}")
+
+                lucro = round((context.job.data['stake']*acc_wins)*0.85,2)
+                prejuizo = round(context.job.data['stake']*acc_loses,2)
+                mensagemParaEnviar = f"📝 SIMULAÇÃO DE RESULTADO 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}:"
+                mensagemParaEnviar += f"\nModo de trade: RT+RV" if context.job.data['trade_rv'] else f"\nModo de trade: Apenas RT"
+                mensagemParaEnviar += f"\nSua stake: R${context.job.data['stake']}\nPayout Médio: 85%\nResultado diário: R${lucro-prejuizo}"
+                await context.bot.send_message(chat_id=context.job.chat_id, text=f"{mensagemParaEnviar}")
+
+
             if "Stop Win" in mensagemParaEnviar or "Stop Loss" in mensagemParaEnviar:
                 contasStopadas.append(context.job.data['email'])
         print("Conta: {} | Mensagens filtradas: {} | Mensagem para enviar: {}".format(context.job.data['email'], mensagensFiltradas, mensagemParaEnviar))
@@ -130,7 +242,9 @@ async def menu_options_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "Link ytb como usar\nCaso tenha algum outro problema que não esteja presente no vídeo, entre em contato com @Winnerzone_83")
     elif user_choice == 'ver placar':
         
-        partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+        result = "\n".join(resultado_separado(context.user_data['trade_rv'],resultados))
+        print(result)
+        partial_result = f"Placar até o momento: ✅ {result.count('✅')} | ❌ {result.count('❌')} | ⚪ {result.count('⚪')}"
 
         # Enviando a mensagem com o menu
         await update.message.reply_text(f"{partial_result}", reply_markup=ReplyKeyboardRemove())
@@ -138,7 +252,9 @@ async def menu_options_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         # Definindo o estado para a etapa do menu
         return ConversationHandler.END
     elif user_choice == 'parar bot':
-        partial_result = f"Placar até o momento: ✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+        result = "\n".join(resultado_separado(context.user_data['trade_rv'],resultados))
+        print(result)
+        partial_result = f"Placar até o momento: ✅ {result.count('✅')} | ❌ {result.count('❌')} | ⚪ {result.count('⚪')}"
         keyboard = [
             [KeyboardButton("Parar bot")],
             [KeyboardButton("Continuar operando")]
@@ -181,10 +297,11 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 'email': 'bejr2002@gmail.com',
                 'senha': 'Bejr2002!',
                 'tipo_conta': 'DEMO',
+                'trade_rv': False,
                 'modo_config': 'Valor',
                 'stake': 150,
-                'stop_win': 120,
-                'stop_loss': 250,
+                'stop_win': 200,
+                'stop_loss': 200,
             }
             x = Process(target=aguardar_compra, args=(informacoes_conta, tradeEvent, info_trade, contas, buy, buy_multi, monitorStopThread, pendingTrades, aux_mensagemTransmissao,))
             x.start()
@@ -204,6 +321,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 'email': 'rey.iqop@gmail.com',
                 'senha': 'IQ@08840051511',
                 'tipo_conta': 'DEMO',
+                'trade_rv': True,
                 'modo_config': 'Valor',
                 'stake': 150,
                 'stop_win': 0,
@@ -216,7 +334,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             email = informacoes_conta['email']
             chat_id = update.message.chat_id
 
-            context.job_queue.run_repeating(listaDeTransmissao, data=email, chat_id=chat_id, interval=1, first=1)
+            context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
                                         reply_markup=mainMenu)
             print(f"{showConfigs(context)}")
@@ -242,7 +360,9 @@ async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_choice == 'parar bot':
         # Pedindo que o usuário forneça o email
         try:
+            global contasStopadas
             contas[context.user_data['email']] = False
+            contasStopadas.append(context.user_data['email'])
             await update.message.reply_text("Ok, bot parado com sucesso!", reply_markup=ReplyKeyboardRemove())
         except:
              await update.message.reply_text("Seu bot já estava parado, nenhuma alteração foi feita.", reply_markup=ReplyKeyboardRemove())
@@ -250,6 +370,13 @@ async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     elif user_choice == 'continuar operando':
         await update.message.reply_text("Ok, nenhuma alteração foi feita.", reply_markup=ReplyKeyboardRemove())
+    elif "_czbotstop" in user_choice:
+        try:
+            motivo = user_choice.split("_czbotstop ")[1]
+        except:
+            motivo = 'Admin do canal parou o bot manualmente.'
+        stopBot(motivo=motivo)
+        await update.message.reply_text('Bot encerrado para todos os usuários com sucesso.')
     else:
         # Opção inválida, reinicie a conversa
         #await update.message.reply_text("Opção inválida. Por favor, selecione uma opção válida.")
@@ -346,6 +473,47 @@ async def real_demo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         #print(context.user_data['api'].get_balance())
         #await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Como não entendi sua resposta, o login foi feito na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())
     # context.user_data['banca_inicial'] = context.user_data['api'].get_balance()
+
+    keyboard = [
+        [KeyboardButton("Reversão + Retração")],
+        [KeyboardButton("Apenas retração")],
+    ]
+
+    menuTradeMode = ReplyKeyboardMarkup(keyboard)
+    texto_informativo_trade_mode = """Na WINNER ZONE, utilizamos 2 tipos de entradas:
+   - Retração (entrada assim que atingir a taxa, para a mesma vela)
+   - Reversão (entrada para a próxima vela)
+
+Para determinar qual entrada fazer, utilizamos o tempo restante de vela quando a taxa é atingida.
+
+Caso a taxa seja atingida 1 minuto e meio antes do final da vela, utilizamos a reversão (próxima vela). Ex: 8h23m46s, 9h59m10s
+Caso contrário, efetuamos a trade na mesma vela.
+
+Qual das opções abaixo deseja que o seu bot efetue as entradas?
+
+_Se ainda tiver dúvidas, acesse: link youtube_
+"""
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text=f"{texto_informativo_trade_mode}",
+                                   reply_markup=menuTradeMode, parse_mode='Markdown')
+    return TRADE_MODE
+
+async def trade_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """print("real/demo")
+    query = update.callback_query
+    await query.answer()
+    print(query)"""
+    # tipo_conta = query.data
+
+    modo_trade = update.message.text.lower()
+
+    if 'Reversão' in modo_trade:
+        context.user_data['trade_rv'] = True
+        #context.user_data['api'].change_balance('PRACTICE')
+        
+        #await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Você escolheu operar na conta DEMO.\nSaldo atual: R${context.user_data['api'].get_balance()}", reply_markup = ReplyKeyboardRemove())
+    else:
+        context.user_data['trade_rv'] = False
 
     keyboard = [
         [KeyboardButton("VALOR FIXO (R$)")],
@@ -456,6 +624,7 @@ async def confirmacao_config_handler(update: Update, context: ContextTypes.DEFAU
             'email': context.user_data['email'],
             'senha': context.user_data['senha'],
             'tipo_conta': context.user_data['tipo_conta'],
+            'trade_rv': context.user_data['trade_rv'],
             'modo_config': context.user_data['modo_config'],
             'stake': context.user_data['stake'],
             'stop_win': context.user_data['stop_win'],
@@ -468,7 +637,7 @@ async def confirmacao_config_handler(update: Update, context: ContextTypes.DEFAU
         email = informacoes_conta['email']
         chat_id = update.message.chat_id
 
-        context.job_queue.run_repeating(listaDeTransmissao, data=email, chat_id=chat_id, interval=1, first=1)
+        context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
                                        reply_markup=ReplyKeyboardRemove())
         print(f"{showConfigs(context)}")
@@ -495,7 +664,7 @@ def monitorStopThread(conta, informacoes_conta, sinal_stop, pendingTrades, aux_m
         time.sleep(5)
         tradesPendentes_atualizadas = pendingTrades.value
         if tradesPendentes_atualizadas > 0:
-            print(f"TRADES PENDENTES: {tradesPendentes_atualizadas}") 
+            #print(f"TRADES PENDENTES: {tradesPendentes_atualizadas}") 
             continue
         
         banca_atual = conta.get_balance()
@@ -507,17 +676,17 @@ def monitorStopThread(conta, informacoes_conta, sinal_stop, pendingTrades, aux_m
             sinal_stop.set()
 
             print("STOP THREAD: MENSAGEM CHEGOU \n   Antes: {}".format(aux_mensagemTransmissao.value))
-            mensagemStop = f"PRIVATE MESSAGE {informacoes_conta['email']}: Stop Win Atingido!"
-            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [mensagemStop]
+            mensagemStop = f"🔐 MENSAGEM PRIVADA 🔐\n\n{informacoes_conta['email']}: Stop Win Atingido!"
+            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + ["🔐 MENSAGEM PRIVADA 🔐",mensagemStop]
             print("   Depois: {}".format(aux_mensagemTransmissao.value))
             break
         if banca_atual<=informacoes_conta['stop_loss']:
             print(f"Stop loss: {informacoes_conta['email']}")
             sinal_stop.set()
-            mensagemStop = f"PRIVATE MESSAGE {informacoes_conta['email']}: Stop Loss Atingido!"
-            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [mensagemStop]
+            mensagemStop = f"🔐 MENSAGEM PRIVADA 🔐\n\n{informacoes_conta['email']}: Stop Loss Atingido!"
+            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + ["🔐 MENSAGEM PRIVADA 🔐",mensagemStop]
             break
-        time.sleep(270)
+        time.sleep(60)
 
 
 def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_compra, func_compra_multi, func_monitorStops, pendingTrades, aux_mensagemTransmissao):
@@ -547,27 +716,31 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
                 acc_api.connect()
 
             sinal_compra.wait()
+
+            
+
             if not(contas[informacoes_conta['email']]) or stop_signal.is_set():
                 break
             infos_compra_atualizadas = info_compra.value
+            print(f"{informacoes_conta['email']} {informacoes_conta['trade_rv']} {infos_compra_atualizadas['type']}")
 
-            if infos_compra_atualizadas['type'] == 'immediate':
+            if infos_compra_atualizadas['type'] == 'immediate' or (informacoes_conta['trade_rv'] == False and infos_compra_atualizadas['type'] == 'rv-immediate'):
                 if not (f"{infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}" in acc_trades):
+                    print(f"{informacoes_conta['email']} TRADE RT - {infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}")
                     func_compra(acc_api, acc_stake, infos_compra_atualizadas['pair'], infos_compra_atualizadas['direction'])
                     acc_trades.append(f"{infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}")
+                    
+            elif informacoes_conta['trade_rv'] == True and infos_compra_atualizadas['type'] != 'rv-immediate':
+                    for i, trade_pair in enumerate(infos_compra_atualizadas['pair']):
+                        if f"{trade_pair} {infos_compra_atualizadas['direction'][i]}" in acc_trades:
+                            infos_compra_atualizadas['type'].pop(i)
+                            infos_compra_atualizadas['pair'].pop(i)
+                            infos_compra_atualizadas['direction'].pop(i)
 
-            else:
-                for i, trade_pair in enumerate(infos_compra_atualizadas['pair']):
-                    if f"{trade_pair} {infos_compra_atualizadas['direction']}" in acc_trades:
-                        infos_compra_atualizadas['type'].pop(i)
-                        infos_compra_atualizadas['pair'].pop(i)
-                        infos_compra_atualizadas['direction'].pop(i)
-
-                func_compra_multi(acc_api, acc_stake, infos_compra_atualizadas['pair'],
-                                  infos_compra_atualizadas['direction'])
-
-                acc_trades.append(' '.join([f'{pair} {infos_compra_atualizadas["direction"][i]}' for i, pair in
-                                            enumerate(infos_compra_atualizadas['pair'])]))
+                    print(f"{informacoes_conta['email']} TRADE RV - {infos_compra_atualizadas['pair']} {infos_compra_atualizadas['direction']}")
+                    func_compra_multi(acc_api, acc_stake, infos_compra_atualizadas['pair'], infos_compra_atualizadas['direction'])
+                    acc_trades.append(' '.join([f'{pair} {infos_compra_atualizadas["direction"][i]}' for i, pair in enumerate(infos_compra_atualizadas['pair'])]))
+                
             if not(stop_thread_is_running):
                 stop_thread.start()
                 stop_thread_is_running = True
@@ -720,10 +893,7 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
 
             else:
                 return
-    else:
-        if "_CZBOTstop" in text:
-            stopBot(motivo=text.split("_CZBOTstop ")[1])
-            await update.message.reply_text('Bot encerrado com sucesso.')
+            
           
 
 
@@ -734,7 +904,8 @@ async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
 def mensagemListaTransmissao(mensagem):
     global aux_mensagemTransmissao
     print("MENSAGEM CHEGOU \n   Antes: {}".format(aux_mensagemTransmissao.value))
-    aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [mensagem]
+    titulo = mensagem.split('\n')[0]
+    aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [(titulo, mensagem)]
     print("   Depois: {}".format(aux_mensagemTransmissao.value))
 
 
@@ -746,8 +917,8 @@ def monitorarListaTransmissao(aux_mensagemTransmissao):
         aux_mensagemTransmissao_atualizado = aux_mensagemTransmissao.value
 
         if aux_mensagemTransmissao_atualizado != mensagemTransmissao and aux_mensagemTransmissao_atualizado != []:
-            print(f"MUDANÇA NA MENSAGEM, ARRAY: {aux_mensagemTransmissao_atualizado}")
             mensagemTransmissao = aux_mensagemTransmissao_atualizado
+            print(f'Mensagens GLOBAIS: {mensagemTransmissao}')
             aux_mensagemTransmissao.value = []
             #print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
         #else:
@@ -767,11 +938,11 @@ def stopBot(motivo):
     print("Stopping...")
     stopThreadSignal = True
     time.sleep(1)
-    scoreBoard = f"✅ {resultados.count('✅')} | ❌ {resultados.count('❌')} | ⚪ {resultados.count('⚪')}"
+    
     if motivo == "Timeout":
-        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}\n\n{scoreBoard}"
+        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}"
     else:
-        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}\n\n{scoreBoard}\n\nMotivo de parada: {motivo}"
+        mensagemFinal = f"📝 RESULTADOS TAXAS VIP SEM GALE 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}\n\n{resultados}\n\nMotivo da parada: {motivo}"
     mensagemListaTransmissao(mensagemFinal)
 
     time.sleep(11)
@@ -896,10 +1067,11 @@ def monitorPairs():
                             print(f"Checando {checkedPair}...")
                             print(lastCandle)
                             print("Trade em: {}\nValor atual: {}".format(tradePrice, lastCandleCloseValue))
+
                             if lastCandleCloseValue < tradePrice:
                                 # down
                                 print("Abaixou")
-                                if tradeType == "immediate":
+                                if "immediate" in tradeType:
                                     result = "WIN RT" if tradeDirection == 'put' else "HIT RT"
                                 else:
                                     result = "WIN RV" if tradeDirection == 'put' else "HIT RV"
@@ -907,7 +1079,7 @@ def monitorPairs():
                             elif lastCandleCloseValue > tradePrice:
                                 # up
                                 print("Aumentou")
-                                if tradeType == "immediate":
+                                if "immediate" in tradeType:
                                     result = "WIN RT" if tradeDirection == 'call' else "HIT RT"
                                 else:
                                     result = "WIN RV" if tradeDirection == 'call' else "HIT RV"
@@ -916,16 +1088,17 @@ def monitorPairs():
                             else:
                                 # draw
                                 print("Igual")
-                                if tradeType == "immediate":
-                                    result = "DOJI"
+                                if "immediate" in tradeType:
+                                    result = "DOJI RT"
                                 else:
-                                    result = "DOJI"
+                                    result = "DOJI RV"
 
                             print(f"Resultado: {result}")
                             result = (f"✅ {':'.join(tradeTime.split(':')[0:2])} {result}" if "WIN" in result 
                                         else f"❌ {':'.join(tradeTime.split(':')[0:2])} {result}" if "HIT" in result
                                         else f"⚪ {':'.join(tradeTime.split(':')[0:2])} {result}"
                                         )
+                            result = result+"*" if tradeType == 'rv-immediate' else result #Especial trade identifier
                             tradesToCheck.pop(tradeIndex)
                             tradeDirectionMessage = "🔴 PUT" if tradeDirection == 'put' else "🟢 CALL"
                             menssagemResultado = f"🎯 RESULTADO DA TRADE 🎯\n\n📊 Ativo: {monitored_pair} \n📍 Direção: {tradeDirectionMessage}\n📝 Resultado: {result}"
@@ -968,9 +1141,7 @@ def monitorPairs():
 
                 if (f"{monitored_pair} put") not in trades:
                     print(f"{currentTime}: {monitored_pair} at {current_price} touched the upper limit ({upper_limit})")
-                    if (minute % 5 == 0) and (seconds <= 5) or ((datetime.strptime(currentTime,
-                                                                                   "%H:%M:%S") - datetime.strptime(
-                            startTime, '%H:%M:%S')).total_seconds() < 10):
+                    if (minute % 5 == 0) and (seconds <= 5) or ((datetime.strptime(currentTime,"%H:%M:%S") - datetime.strptime(startTime, '%H:%M:%S')).total_seconds() < 10):
                         taxas[monitored_pair]["PUT"] = None
                         if (minute % 5 == 0) and (seconds <= 10):
                             mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🔴 PUT\n❓ Motivo: Taxa atingida na abertura da vela\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
@@ -982,10 +1153,25 @@ def monitorPairs():
 
                     elif (minute == 9 or minute == 4) or (
                             (minute == 8 and seconds >= 35) or (minute == 3 and seconds >= 35)):
+                        
+                        if not((minute == 9 or minute == 4) and seconds >= 30):
+                            info_trade.value = {'type': 'rv-immediate', 'pair': monitored_pair, 'direction': 'put'}
+                            tradeEvent.set()
+                            time.sleep(0.1)
+                            tradeEvent.clear()
+                            aux_hour = int(currentTime.split(":")[0])
+                            aux_minutes = int(currentTime.split(":")[1])
+                            aux_minutes = aux_minutes - aux_minutes % 5
+                            tradesToCheck.append((monitored_pair, f"{aux_hour}:{aux_minutes}:00", current_price, 'put', 'rv-immediate'))
+                        else:
+                            mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🔴 PUT\n❓ Motivo: Taxa atingida no fechamento da vela\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
+                            __updateResultsCallRow(monitored_pair, 'PUT', f"cancelada*")
+                            mensagemListaTransmissao(mensagem)
 
                         scheduledTrades[0].append(monitored_pair)
                         scheduledTrades[1].append("put")
                         scheduledTrades[2].append(current_price)
+
                         trades.append(f"{monitored_pair} put")
                         if not (scheduleSign.is_set()):
                             scheduleSign.set()
@@ -994,7 +1180,7 @@ def monitorPairs():
                     else:
                         info_trade.value = {'type': 'immediate', 'pair': monitored_pair, 'direction': 'put'}
                         tradeEvent.set()
-                        time.sleep(0.2)
+                        time.sleep(0.1)
                         tradeEvent.clear()
                         info_trade.value = {'type': '', 'pair': '', 'direction': ''}
                         trades.append(f"{monitored_pair} put")
@@ -1002,9 +1188,8 @@ def monitorPairs():
                         aux_hour = int(currentTime.split(":")[0])
                         aux_minutes = int(currentTime.split(":")[1])
                         aux_minutes = aux_minutes - aux_minutes % 5
+                        tradesToCheck.append((monitored_pair, f"{aux_hour}:{aux_minutes}:00", current_price, 'put', 'immediate'))
 
-                        tradesToCheck.append(
-                            (monitored_pair, f"{aux_hour}:{aux_minutes}:00", current_price, 'put', 'immediate'))
                         mensagem = f"🎯 TRADE REALIZADA - RETRAÇÃO M5 🎯\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🔴 PUT\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
                         pendingTrades.value += 1
                         
@@ -1029,10 +1214,26 @@ def monitorPairs():
 
                     elif (minute == 9 or minute == 4) or (
                             (minute == 8 and seconds >= 35) or (minute == 3 and seconds >= 35)):   
+                        
+                        if not((minute == 9 or minute == 4) and seconds >= 30):
+                            info_trade.value = {'type': 'rv-immediate', 'pair': monitored_pair, 'direction': 'call'}
+                            tradeEvent.set()
+                            time.sleep(0.1)
+                            tradeEvent.clear()
+                            aux_hour = int(currentTime.split(":")[0])
+                            aux_minutes = int(currentTime.split(":")[1])
+                            aux_minutes = aux_minutes - aux_minutes % 5
+                            tradesToCheck.append((monitored_pair, f"{aux_hour}:{aux_minutes}:00", current_price, 'call', 'rv-immediate'))
+                        else:
+                            mensagem = f"🚨 TRADE CANCELADA 🚨\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🟢 CALL\n❓ Motivo: Taxa atingida no fechamento da vela\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
+                            __updateResultsCallRow(monitored_pair, 'CALL', f"cancelada*")
+                            mensagemListaTransmissao(mensagem)
+
                         scheduledTrades[0].append(monitored_pair)
                         scheduledTrades[1].append("call")
                         scheduledTrades[2].append(current_price)
                         trades.append(f"{monitored_pair} call")
+
                         if not (scheduleSign.is_set()):
                             scheduleSign.set()
                         mensagem = f"⏱️ TRADE AGENDADA - REVERSÃO M5 ⏱️\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🟢 CALL\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
@@ -1041,7 +1242,7 @@ def monitorPairs():
                         info_trade.value = {'type': 'immediate', 'pair': monitored_pair, 'direction': 'call'}
                         tradeEvent.set()
                         mensagem = f"🎯 TRADE REALIZADA - RETRAÇÃO M5 🎯\n\n📊 Ativo: {monitored_pair}\n📍 Direção: 🟢 CALL\n⏱️ Horário: {currentTime}\n💰 Preço atual: {current_price}"
-                        time.sleep(0.2)
+                        time.sleep(0.1)
                         tradeEvent.clear()
                         trades.append(f"{monitored_pair} call")
 
@@ -1066,6 +1267,7 @@ if __name__ == '__main__':
     statusBot = False
 
     resultados = ''
+    resultados_RT = ''
     aux_mensagemTransmissao = []
     mensagemTransmissao = []
     mensagensEnviadas = []
@@ -1116,6 +1318,7 @@ if __name__ == '__main__':
                 CADASTRO_SENHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, cadastro_senha_handler)],
                 REAL_DEMO: [MessageHandler(filters.TEXT & ~filters.COMMAND, real_demo_handler)],
                 FIXO_PERCENTUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, fixo_percentual_handler)],
+                TRADE_MODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, trade_mode_handler)],
                 CONFIG_STAKE: [MessageHandler(filters.TEXT & ~filters.COMMAND, stake_handler)],
                 STOP_WIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, stop_win_handler)],
                 STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, stop_loss_handler)],
@@ -1132,6 +1335,7 @@ if __name__ == '__main__':
         # Messages
         app.add_handler(conv_handler_cadastro)
         app.add_handler(MessageHandler(filters.ChatType.GROUP | filters.ChatType.CHANNEL & filters.TEXT, handle_message))
+
         # Errors
         app.add_error_handler(error)
 

@@ -509,7 +509,7 @@ async def trade_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     modo_trade = update.message.text.lower()
 
-    if 'Reversão' in modo_trade:
+    if 'reversão' in modo_trade:
         context.user_data['trade_rv'] = True
         #context.user_data['api'].change_balance('PRACTICE')
         
@@ -699,7 +699,8 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
         acc_api.change_balance('REAL') if informacoes_conta['tipo_conta'] == 'REAL' else acc_api.change_balance(
             'PRACTICE')
         acc_banca_inicial = acc_api.get_balance()
-        acc_stake = informacoes_conta['stake']
+
+        acc_stake = informacoes_conta['stake'] if informacoes_conta['modo_config'] == 'Valor' else round(acc_banca_inicial * informacoes_conta['stake'] / 100, 2)
         
         if informacoes_conta['stop_win'] != 0:
             informacoes_conta['stop_win'] = (acc_banca_inicial + informacoes_conta['stop_win'] if informacoes_conta['modo_config'] == 'Valor' else acc_banca_inicial + round(acc_banca_inicial * informacoes_conta['stop_win'] / 100, 2))
@@ -712,7 +713,14 @@ def aguardar_compra(informacoes_conta, sinal_compra, info_compra, contas, func_c
         stop_signal = Event()   
         stop_thread = threading.Thread(target=func_monitorStops, args=(acc_api,informacoes_conta, stop_signal, pendingTrades,aux_mensagemTransmissao,))
         stop_thread_is_running = False
-
+        log_m = f"""CONTA AGUARDANDO TRADES
+Conta: {informacoes_conta['email']}
+Stake: {acc_stake}
+RT+RV: {informacoes_conta['trade_rv']}
+Stop Win: {informacoes_conta['stop_win']}
+Stop Loss: {informacoes_conta['stop_loss']}
+"""
+        print(log_m)
         while True:
             if not (acc_api.check_connect()):
                 acc_api.connect()
@@ -1063,7 +1071,7 @@ def monitorPairs():
                             lastCandle = api.get_candles(checkedPair, 300, 2, time.time())
 
                             lastCandleCloseValue = lastCandle[0]['close']
-                            if not(tradeType == "immediate"):
+                            if not("immediate" in tradeType):
                                 tradePrice = lastCandle[0]['open']
 
                             print(f"Checando {checkedPair}...")

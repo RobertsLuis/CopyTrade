@@ -11,7 +11,7 @@ import time
 import math
 from datetime import datetime
 import threading
-from multiprocessing import Process, Event, Manager, set_start_method
+from multiprocessing import Process, Event, Manager, set_start_method, Lock
 import os
 import pytz
 import sys
@@ -33,16 +33,12 @@ def showConfigs(context):
     linhas = [
         f"📩 Conta: {context.user_data['email']}",
         # f"💰 Banca inicial: {context.user_data['banca_inicial']}",
-        f"⚙️ Tipo de conta: {context.user_data['tipo_conta']} 🟢" if context.user_data[
-                                                                        'tipo_conta'] == 'REAL' else f"⚙️ Tipo de conta: {context.user_data['tipo_conta']} 🟠",
+        "⚙️ Tipo de conta: REAL 🟢" if context.user_data['tipo_conta'] == 'REAL' else "⚙️ Tipo de conta: DEMO 🟠",
+        "▶️ Modo operacional: RT+RV" if context.user_data['trade_rv'] == True else "▶️ Modo operacional: Apenas RT",
+        f"\n📍 Stake: R${context.user_data['stake']}" if context.user_data['modo_config'] == 'Valor' else f"📍 Stake: {context.user_data['stake']}%",
+        f"📍 Stop Win: R${context.user_data['stop_win']}" if context.user_data['modo_config'] == 'Valor' else f"📍 Stop Win: {context.user_data['stop_win']}%",
+        f"📍 Stop Loss: R${context.user_data['stop_loss']}" if context.user_data['modo_config'] == 'Valor' else f"📍 Stop Loss: {context.user_data['stop_loss']}%",
 
-        f"\n📍 Stake: R${context.user_data['stake']}" if context.user_data[
-                                                            'modo_config'] == 'Valor' else f"📍 Stake: {context.user_data['stake']}%",
-
-        f"📍 Stop Win: R${context.user_data['stop_win']}" if context.user_data[
-                                                                'modo_config'] == 'Valor' else f"📍 Stop Win: {context.user_data['stop_win']}%",
-        f"📍 Stop Loss: R${context.user_data['stop_loss']}" if context.user_data[
-                                                                  'modo_config'] == 'Valor' else f"📍 Stop Loss: {context.user_data['stop_loss']}%",
         f"\n⏱️ Última modificação: {context.user_data['ultima_modificacao']}"
     ]
 
@@ -202,12 +198,15 @@ async def listaDeTransmissao(context: ContextTypes.DEFAULT_TYPE):
                 
                 mensagemParaEnviar = '\n'.join(aux_finalMessage)
                 await context.bot.send_message(chat_id=context.job.chat_id, text=f"{mensagemParaEnviar}")
-
+                
                 lucro = round((context.job.data['stake']*acc_wins)*0.85,2)
                 prejuizo = round(context.job.data['stake']*acc_loses,2)
+
                 mensagemParaEnviar = f"📝 SIMULAÇÃO DE RESULTADO 📝\n⏱️ {datetime.now(tz).strftime('%d/%m/%Y')}:"
-                mensagemParaEnviar += f"\nModo de trade: RT+RV" if context.job.data['trade_rv'] else f"\nModo de trade: Apenas RT"
-                mensagemParaEnviar += f"\nSua stake: R${context.job.data['stake']}\nPayout Médio: 85%\nResultado diário: R${lucro-prejuizo}"
+                mensagemParaEnviar += f"\nModo de trade: RT+RV" if context.job.data['trade_rv'] else f"\nModo de trade: Apenas RT\nPayout Médio: 85%"
+
+                eng_unit = 'R$' if context.job.data['modo_config'] == 'Valor' else '%'
+                mensagemParaEnviar += f"\nSua stake: {context.job.data['stake']}{eng_unit}\nResultado diário: {round(lucro-prejuizo,2)}{eng_unit}" 
                 await context.bot.send_message(chat_id=context.job.chat_id, text=f"{mensagemParaEnviar}")
 
 
@@ -313,8 +312,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             chat_id = update.message.chat_id
 
             context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!",
-                                        reply_markup=mainMenu)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!", reply_markup=mainMenu)
             print(f"{showConfigs(context)}")
             return MENU_OPTIONS
         elif codigo == 'teste2':
@@ -389,10 +387,13 @@ async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def fazer_login(email, senha, pending_login_accs):
     print(f"INSIDE LOGIN PROCESS - Tentativa de login: {email} {senha}")
     acc = IQ_Option(email, senha)
-    acc_check, acc_reason = acc.connect()
-    print(pending_login_accs)
-    pending_login_accs[email] = (acc_check, acc_reason)
-    print(f"INSIDE LOGIN PROCESS - Tentativa finalizada: {email} {acc_check} {acc_reason}")
+    try:
+        acc_check, acc_reason = acc.connect()
+        print(pending_login_accs)
+        pending_login_accs[email] = (acc_check, acc_reason)
+        print(f"INSIDE LOGIN PROCESS - Tentativa finalizada: {email} {acc_check} {acc_reason}")
+    except:
+        pass
 
 # Função para lidar com o fornecimento da senha
 async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -912,29 +913,39 @@ async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
 
 
 def mensagemListaTransmissao(mensagem):
-    global aux_mensagemTransmissao
-    print("MENSAGEM CHEGOU \n   Antes: {}".format(aux_mensagemTransmissao.value))
-    titulo = mensagem.split('\n')[0]
-    aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [(titulo, mensagem)]
-    print("   Depois: {}".format(aux_mensagemTransmissao.value))
+    global aux_mensagemTransmissao, lock_msgTransmissao
+    try:
+        lock_msgTransmissao.acquire()
+        print("MENSAGEM CHEGOU \n   Antes: {}".format(aux_mensagemTransmissao.value))
+        titulo = mensagem.split('\n')[0]
+        aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [(titulo, mensagem)]
+        print("   Depois: {}".format(aux_mensagemTransmissao.value))
+    except Exception as e:
+        print(f"Erro ao processar mensagem: {e}")
+    finally:
+        lock_msgTransmissao.release()
 
-
-def monitorarListaTransmissao(aux_mensagemTransmissao):
+def monitorarListaTransmissao(aux_mensagemTransmissao, lock_msgTransmissao):
     while True:
         time.sleep(10)
-
         global mensagemTransmissao, stopListaTransmissao
-        aux_mensagemTransmissao_atualizado = aux_mensagemTransmissao.value
+        try:
+            lock_msgTransmissao.acquire()
+            aux_mensagemTransmissao_atualizado = aux_mensagemTransmissao.value
 
-        if aux_mensagemTransmissao_atualizado != mensagemTransmissao and aux_mensagemTransmissao_atualizado != []:
-            mensagemTransmissao = aux_mensagemTransmissao_atualizado
-            print(f'Mensagens GLOBAIS: {mensagemTransmissao}')
-            aux_mensagemTransmissao.value = []
-            #print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
-        #else:
-        #    print(f"{__getCurrentTime()} Sem mudanças na mensagem")
-        if stopListaTransmissao:
-            break
+            if aux_mensagemTransmissao_atualizado != mensagemTransmissao and aux_mensagemTransmissao_atualizado != []:
+                mensagemTransmissao = aux_mensagemTransmissao_atualizado
+                print(f'Mensagens GLOBAIS: {mensagemTransmissao}')
+                aux_mensagemTransmissao.value = []
+                #print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
+            #else:
+            #    print(f"{__getCurrentTime()} Sem mudanças na mensagem")
+        except Exception as e:
+            print(f"Erro ao processar mensagem: {e}")
+        finally:
+            lock_msgTransmissao.release()
+            if stopListaTransmissao:
+                break
 
 def startBot():
     global thread_pares, thread_agendamentos, thread_transmissao, statusBot
@@ -967,7 +978,7 @@ Returns:
     str: IQ Option server time on this format H:M:S"""
     global tz
     time = datetime.fromtimestamp(api.get_server_timestamp(), tz).strftime("%H:%M:%S")
-    if "14:30:1" in time:
+    if "22:00:1" in time:
         __updateResultsCallRow(pair='stop')
         stopBot("Timeout")
     return time
@@ -1296,10 +1307,11 @@ if __name__ == '__main__':
         info_trade = manager.Value(typecode='dict', value={'type': '', 'pair': '', 'direction': ''})
         pendingTrades = manager.Value(typecode='int', value=0)
         aux_mensagemTransmissao = manager.Value(typecode='list', value=[])
+        lock_msgTransmissao = Lock()
 
         thread_pares = threading.Thread(target=monitorPairs)
         thread_agendamentos = threading.Thread(target=__monitorScheduledTrades)
-        thread_transmissao = threading.Thread(target=monitorarListaTransmissao, args=(aux_mensagemTransmissao,))
+        thread_transmissao = threading.Thread(target=monitorarListaTransmissao, args=(aux_mensagemTransmissao, lock_msgTransmissao))
         
         contas = manager.dict()
         

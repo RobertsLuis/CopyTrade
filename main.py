@@ -976,7 +976,7 @@ Returns:
     str: IQ Option server time on this format H:M:S"""
     global tz
     time = datetime.fromtimestamp(api.get_server_timestamp(), tz).strftime("%H:%M:%S")
-    if "22:00:1" in time:
+    if "14:30:1" in time:
         __updateResultsCallRow(pair='stop')
         stopBot("Timeout")
     return time

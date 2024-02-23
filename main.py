@@ -292,6 +292,8 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data['email'] = 'rey.iqop@gmail.com'
         elif codigo == '3':
             context.user_data['email'] = 'belmorvictor@gmail.com'
+        elif codigo == '4':
+            context.user_data['email'] = 'neto_paixao2013@hotmail.com'
         elif codigo == 'teste1':
             context.user_data['trades'] = []
             informacoes_conta = {

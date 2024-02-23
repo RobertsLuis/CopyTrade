@@ -283,9 +283,8 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Obtendo o email do usuário
     codigo = update.message.text
 
-    lista_codigos = ['1', '2', '3', 'teste1', 'teste2']
+    lista_codigos = ['1', '2', '3', '4', 'teste1', 'teste2']
     if codigo in lista_codigos:
-
         if codigo == '1':
             context.user_data['email'] = 'bejr2002@gmail.com'
         elif codigo == '2':

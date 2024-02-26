@@ -26,12 +26,11 @@ tz = pytz.timezone('America/Sao_Paulo')
 #TODO MONTAR UMA LÓGICA PARA ENVIAR INFORMAÇÕES DE CONTAS QUE PEDIRAM PARA SER STOPADAS ABRUPTAMENTE -> 
 MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, TRADE_MODE,CONFIG_STAKE, STOP_WIN, STOP_LOSS, CONFIRMACAO_CONFIG, MENU_STOP = range(11)
 
-
 # Comandos
 def showConfigs(context):
     context.user_data['ultima_modificacao'] = datetime.now(tz).strftime("%H:%M:%S")
     linhas = [
-        f"📩 Conta: {context.user_data['email']}",
+        f"📩 Conta: `{context.user_data['email']}`",
         # f"💰 Banca inicial: {context.user_data['banca_inicial']}",
         "⚙️ Tipo de conta: REAL 🟢" if context.user_data['tipo_conta'] == 'REAL' else "⚙️ Tipo de conta: DEMO 🟠",
         "▶️ Modo operacional: RT+RV" if context.user_data['trade_rv'] == True else "▶️ Modo operacional: Apenas RT",
@@ -41,9 +40,8 @@ def showConfigs(context):
 
         f"\n⏱️ Última modificação: {context.user_data['ultima_modificacao']}"
     ]
-
+    
     return "\n".join(linhas)
-
 
 async def main_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(context.user_data)

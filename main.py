@@ -15,12 +15,14 @@ from multiprocessing import Process, Event, Manager, set_start_method, Lock
 import os
 import pytz
 import sys
-
+import sqlite3
 import asyncio
 
 token = "6485467359:AAFZZuUeP846mDcyhKs887Hs-LqjGoKJHrw"
 botUsername = "@wzTaxa_bot"
 tz = pytz.timezone('America/Sao_Paulo')
+bd_connection = sqlite3.connect('cloudzonebd.db')
+
 
 # TEM QUE TER THREAD PARA VERIFICAR EM TODAS AS CONTAS SE TEM STOP WIN OU STOP LOSS
 #TODO MONTAR UMA LÓGICA PARA ENVIAR INFORMAÇÕES DE CONTAS QUE PEDIRAM PARA SER STOPADAS ABRUPTAMENTE -> 
@@ -31,7 +33,7 @@ MENU_OPTIONS, CODIGO_BOT, CADASTRO_SENHA, REAL_DEMO, FIXO_PERCENTUAL, TRADE_MODE
 def showConfigs(context):
     context.user_data['ultima_modificacao'] = datetime.now(tz).strftime("%H:%M:%S")
     linhas = [
-        f"📩 Conta: {context.user_data['email']}",
+        f"📩 Conta: `{context.user_data['email']}`",
         # f"💰 Banca inicial: {context.user_data['banca_inicial']}",
         "⚙️ Tipo de conta: REAL 🟢" if context.user_data['tipo_conta'] == 'REAL' else "⚙️ Tipo de conta: DEMO 🟠",
         "▶️ Modo operacional: RT+RV" if context.user_data['trade_rv'] == True else "▶️ Modo operacional: Apenas RT",

@@ -80,19 +80,34 @@ def teste_pesquisar_usuario_por_codigo(codigo):
     cursor = conexao.cursor()
 
     # Executar a consulta
-    cursor.execute("SELECT * FROM usuarios WHERE codigo=?", (codigo,))
-    usuario = cursor.fetchone()  # Retorna a primeira linha correspondente
-    cod, email, nome, data, tempo_expiracao = usuario
+    try:
+        cursor.execute("SELECT * FROM usuarios WHERE codigo=?", (codigo,))
+        usuario = cursor.fetchone()  # Retorna a primeira linha correspondente
+        cod, email, nome, data_inscricao, tempo_expiracao = usuario
 
-    data = datetime.strptime(data, '%d %m %Y')
-    today = datetime.strptime('26 01 2024', '%d %m %Y')
-    print(f"Hoje: {today}")
-    print(f"Data Obtida: {data}")
-    print(f"Diff: {abs((today-data).days)}")
-    # Fechar a conexão
-    conexao.close()
+        data_inscricao = datetime.strptime(data_inscricao, '%d %m %Y')
+        today = datetime.strptime('28 03 2024', '%d %m %Y')
+        dif = abs((today-data_inscricao).days)
+        licenca_ativa = dif<tempo_expiracao
 
-    return usuario
+        print(f"Hoje: {today}")
+        print(f"Data Obtida: {data_inscricao}")
+        print(f"Diff: {dif}")
+        print(f"Licença ativa: {licenca_ativa}")
+
+        response = {
+            'email': email,
+            'nome': nome,
+            'data': data_inscricao,
+            'tempo_expiracao': tempo_expiracao,
+            'licenca_ativa': licenca_ativa
+        }
+        # Fechar a conexão
+        conexao.close()
+        return response
+    except Exception as e:
+        print(e)
+        return None
 
 
 if __name__ == "__main__":

@@ -17,10 +17,15 @@ import pytz
 import sys
 import sqlite3
 import asyncio
+from config_db import pesquisar_usuario, criar_usuario, renovar_usuario ,criar_banco_de_dados
 
 token = "6485467359:AAFZZuUeP846mDcyhKs887Hs-LqjGoKJHrw"
 botUsername = "@wzTaxa_bot"
 tz = pytz.timezone('America/Sao_Paulo')
+
+if not(os.path.exists('cloudzonebd.db')):
+    criar_banco_de_dados()
+
 bd_connection = sqlite3.connect('cloudzonebd.db')
 
 
@@ -285,40 +290,31 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Obtendo o email do usuário
     codigo = update.message.text
 
-    lista_codigos = ['1', '2', '3', '4', 'teste1', 'teste2']
-    if codigo in lista_codigos:
-        if codigo == '1':
-            context.user_data['email'] = 'bejr2002@gmail.com'
-        elif codigo == '2':
-            context.user_data['email'] = 'rey.iqop@gmail.com'
-        elif codigo == '3':
-            context.user_data['email'] = 'belmorvictor@gmail.com'
-        elif codigo == '4':
-            context.user_data['email'] = 'neto_paixao2013@hotmail.com'
-        elif codigo == 'teste1':
-            context.user_data['trades'] = []
-            informacoes_conta = {
-                'email': 'bejr2002@gmail.com',
-                'senha': 'Bejr2002!',
-                'tipo_conta': 'DEMO',
-                'trade_rv': False,
-                'modo_config': 'Valor',
-                'stake': 150,
-                'stop_win': 200,
-                'stop_loss': 200,
-            }
-            x = Process(target=aguardar_compra, args=(informacoes_conta, tradeEvent, info_trade, contas, buy, buy_multi, monitorStopThread, pendingTrades, aux_mensagemTransmissao,))
-            x.start()
-            contas[informacoes_conta['email']] = True
+    if codigo == 'teste1':
+        context.user_data['trades'] = []
+        informacoes_conta = {
+            'email': 'bejr2002@gmail.com',
+            'senha': 'Bejr2002!',
+            'tipo_conta': 'DEMO',
+            'trade_rv': False,
+            'modo_config': 'Valor',
+            'stake': 150,
+            'stop_win': 200,
+            'stop_loss': 200,
+        }
+        x = Process(target=aguardar_compra, args=(informacoes_conta, tradeEvent, info_trade, contas, buy, buy_multi, monitorStopThread, pendingTrades, aux_mensagemTransmissao,))
+        x.start()
+        contas[informacoes_conta['email']] = True
 
-            email = informacoes_conta['email']
-            chat_id = update.message.chat_id
+        email = informacoes_conta['email']
+        chat_id = update.message.chat_id
 
-            context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!", reply_markup=mainMenu)
-            print(f"{showConfigs(context)}")
-            return MENU_OPTIONS
-        elif codigo == 'teste2':
+        context.job_queue.run_repeating(listaDeTransmissao, data=informacoes_conta, chat_id=chat_id, interval=1, first=1)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Configurações salvas com sucesso!", reply_markup=mainMenu)
+        print(f"{showConfigs(context)}")
+        return MENU_OPTIONS
+    
+    elif codigo == 'teste2':
             context.user_data['trades'] = []
             informacoes_conta = {
                 'email': 'rey.iqop@gmail.com',
@@ -342,19 +338,19 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                                         reply_markup=mainMenu)
             print(f"{showConfigs(context)}")
             return MENU_OPTIONS
-
-        await update.message.reply_text(f"Código validado com sucesso!\n\nAgora, digite a sua senha da IQ OPTION")
-        return CADASTRO_SENHA
     else:
-        await update.message.reply_text(f"Código incorreto. Por favor tente novamente ou entre em contato com o suporte")
-        return CODIGO_BOT 
-    # Logica para validação do código pelo BD!
-    # ...
-    # retorna para o usuário o e-mail que está associoado ao código dele (no BD) para ele fazer login na IQ OPTION e sinaliza que caso queira trocar o e-mail da IQ Option, entre em contato com o suporte
+        usuario = pesquisar_usuario(codigo)
+        print(usuario)
+        if usuario == None:
+            await update.message.reply_text(f"Código incorreto. Por favor tente novamente ou entre em contato com o suporte")
+            return CODIGO_BOT
+        if usuario['licenca_ativa']:
+            await update.message.reply_text(f"Código validado com sucesso!\n\nAgora, digite a sua senha da IQ OPTION")
+            return CADASTRO_SENHA
+        else:
+            await update.message.reply_text(f"Código expirado, entre em contato com o suporte e solicite uma renovação!\n\n")
+            return ConversationHandler.END
 
-    # Pede a senha dele para entrar na IQ Option
-    # await update.message.reply_text(f"")
-    # Definindo o estado para a etapa da senha no cadastro
 async def menu_stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print('here')
     # Obtendo a escolha do usuário
@@ -400,7 +396,6 @@ def fazer_login(email, senha, pending_login_accs):
 
 # Função para lidar com o fornecimento da senha
 async def cadastro_senha_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
     
     # Obtendo a senha do usuário
     senha = update.message.text
@@ -908,8 +903,92 @@ async def handle_message(update: Update, context=ContextTypes.DEFAULT_TYPE):
             else:
                 return
             
-          
+async def admin_menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Para acessar o menu administrador, digite o seu código de ADM")
+    # Definindo o estado para a etapa do menu
+    return CODIGO_ADMIN
+       
+async def admin_codigo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    codigo_admin = update.message.text.lower()
+    if codigo_admin == '_admin2459':
+        keyboard = [
+            [KeyboardButton("Enviar mensagem para todos")],
+            [KeyboardButton("Parar bot para todos")],
+            [KeyboardButton("Cadastrar novo usuário")],
+            [KeyboardButton("Renovar usuário existente")]
+        ]
+        mainMenu = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
 
+        # Enviando a mensagem com o menu
+        await update.message.reply_text("Selecione uma opção:", reply_markup=mainMenu, parse_mode='Markdown')
+        return ADMIN_OPTIONS
+    
+async def admin_options_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_choice = update.message.text.lower()
+
+    if user_choice == 'enviar mensagem para todos':
+        await update.message.reply_text("Ok, digite a mensagem que será enviada aos usuários logados.")
+        return ADMIN_ENVIAR_MENSAGEM
+    elif user_choice == 'parar bot para todos':
+        await update.message.reply_text("Ok, digite o motivo da parada\n_(Essa mensagem será enviada na mensagem de resultado)_", parse_mode='Markdown')
+        return ADMIN_PARAR_BOT
+    elif user_choice == 'cadastrar novo usuário':
+        await update.message.reply_text("Digite qual será o nome do usuário a ser cadastrado")
+        return ADMIN_CADASTRAR_USUARIO
+    elif user_choice == 'renovar usuário existente':
+        await update.message.reply_text("Ok, digite a mensagem que será enviada aos usuários logados.")
+        return ADMIN_RENOVAR_USUARIO
+    
+async def admin_enviar_mensagem_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mensagem = update.message.text.lower()
+    mensagemListaTransmissao(mensagem)
+    await update.message.reply_text("Mensagem enviada com sucesso! ✅")
+    return ConversationHandler.END
+
+async def admin_parar_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    motivo = update.message.text.lower()
+    stopBot(motivo=motivo)
+    await update.message.reply_text("Bot parado com sucesso! ✅")
+    return ConversationHandler.END
+
+async def admin_cadastro_usuario_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nome = update.message.text.lower()
+    context.user_data['nome_para_cadastrar'] = nome
+    await update.message.reply_text(f"Qual o e-mail da IQ que será vinculado ao usuario {nome}?")
+    return ADMIN_PERIODO_CADASTRO
+
+async def admin_periodo_cadastro_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    email = update.message.text.lower()
+    context.user_data['email_para_cadastrar'] = email
+    keyboard = [
+            [KeyboardButton("1 mês")],
+            [KeyboardButton("3 meses")],
+            [KeyboardButton("6 meses")]
+        ]
+    menuPeriodoCadastro = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+
+        # Enviando a mensagem com o menu
+    await update.message.reply_text("Qual a licença que ele adquiriu?", reply_markup=menuPeriodoCadastro, parse_mode='Markdown')
+
+    return ADMIN_FINALIZAR_CADASTRO
+
+async def admin_finalizar_cadastro_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    periodo = update.message.text.lower()
+    if '1' in periodo:
+        dias = 30
+    elif '3' in periodo:
+        dias = 90
+    elif '6' in periodo:
+        dias = 180
+    
+    resposta = criar_usuario(context.user_data['nome_para_cadastrar'],context.user_data['email_para_cadastrar'],dias)
+    if resposta[0]:
+        await update.message.reply_text(f"Usuário {context.user_data['nome_para_cadastrar']}criado com sucesso, vinculado ao e-mail {context.user_data['email_para_cadastrar']}!\n\nEnvie o seguinte código para o cliente:")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{resposta[1]}")
+        return ConversationHandler.END
+    else:
+        await update.message.reply_text(f"{resposta[1]}")
+        return ConversationHandler.END
 
 async def error(update: Update, context=ContextTypes.DEFAULT_TYPE):
     print(f'Update: {update} caused error {context.error}')
@@ -1355,6 +1434,7 @@ if __name__ == '__main__':
         )
 
         app.add_handler(CommandHandler('menu', main_menu_command))
+        app.add_handler(CommandHandler('admin', main_menu_command))
         app.add_handler(CommandHandler('help', help_command))
 
         # Messages

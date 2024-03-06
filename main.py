@@ -680,14 +680,14 @@ def monitorStopThread(conta, informacoes_conta, sinal_stop, pendingTrades, aux_m
 
             print("STOP THREAD: MENSAGEM CHEGOU \n   Antes: {}".format(aux_mensagemTransmissao.value))
             mensagemStop = f"🔐 MENSAGEM PRIVADA 🔐\n\n{informacoes_conta['email']}: Stop Win Atingido!"
-            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + ["🔐 MENSAGEM PRIVADA 🔐",mensagemStop]
+            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [("🔐 MENSAGEM PRIVADA 🔐",mensagemStop)]
             print("   Depois: {}".format(aux_mensagemTransmissao.value))
             break
         if banca_atual<=informacoes_conta['stop_loss']:
             print(f"Stop loss: {informacoes_conta['email']}")
             sinal_stop.set()
             mensagemStop = f"🔐 MENSAGEM PRIVADA 🔐\n\n{informacoes_conta['email']}: Stop Loss Atingido!"
-            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + ["🔐 MENSAGEM PRIVADA 🔐",mensagemStop]
+            aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [("🔐 MENSAGEM PRIVADA 🔐",mensagemStop)]
             break
         time.sleep(60)
 
@@ -920,10 +920,13 @@ def mensagemListaTransmissao(mensagem):
         titulo = mensagem.split('\n')[0]
         aux_mensagemTransmissao.value = aux_mensagemTransmissao.value + [(titulo, mensagem)]
         print("   Depois: {}".format(aux_mensagemTransmissao.value))
-    except Exception as e:
-        print(f"Erro ao processar mensagem: {e}")
-    finally:
         lock_msgTransmissao.release()
+        time.sleep(2)
+    except Exception as e:
+        print(f"Erro ao processar mensagem (mensagemListaTransmissão): {e}")
+        time.sleep(1)
+        lock_msgTransmissao.release()
+        time.sleep(2)
 
 def monitorarListaTransmissao(aux_mensagemTransmissao, lock_msgTransmissao):
     while True:
@@ -940,10 +943,15 @@ def monitorarListaTransmissao(aux_mensagemTransmissao, lock_msgTransmissao):
                 #print(f"Overview das trades:\nAgendadas: {scheduledTrades}\nPara checar: {tradesToCheck}")
             #else:
             #    print(f"{__getCurrentTime()} Sem mudanças na mensagem")
-        except Exception as e:
-            print(f"Erro ao processar mensagem: {e}")
-        finally:
             lock_msgTransmissao.release()
+            time.sleep(2)
+        
+        except Exception as e:
+            print(f"Erro ao processar mensagem (monitorarListaTransmissão): {e}")
+            time.sleep(1)
+            lock_msgTransmissao.release()
+            time.sleep(2)
+        finally:
             if stopListaTransmissao:
                 break
 

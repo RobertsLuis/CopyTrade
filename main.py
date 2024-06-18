@@ -296,7 +296,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data['trades'] = []
             informacoes_conta = {
                 'email': 'bejr2002@gmail.com',
-                'senha': 'Bejr2002!',
+                'senha': '--------',
                 'tipo_conta': 'DEMO',
                 'trade_rv': False,
                 'modo_config': 'Valor',
@@ -319,7 +319,7 @@ async def codigo_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data['trades'] = []
             informacoes_conta = {
                 'email': 'rey.iqop@gmail.com',
-                'senha': 'IQ@08840051511',
+                'senha': '------',
                 'tipo_conta': 'DEMO',
                 'trade_rv': True,
                 'modo_config': 'Valor',
